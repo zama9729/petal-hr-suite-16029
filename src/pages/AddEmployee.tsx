@@ -73,53 +73,23 @@ export default function AddEmployee() {
       const validated = employeeSchema.parse(formData);
       setLoading(true);
 
-      // Generate temporary password
-      const tempPassword = Math.random().toString(36).slice(-8) + Math.random().toString(36).slice(-8);
+      // Get current session
+      const { data: { session } } = await supabase.auth.getSession();
+      
+      if (!session) {
+        throw new Error('Not authenticated');
+      }
 
-      // Create user account
-      const { data: authData, error: authError } = await supabase.auth.admin.createUser({
-        email: validated.email,
-        password: tempPassword,
-        email_confirm: true,
-        user_metadata: {
-          first_name: validated.firstName,
-          last_name: validated.lastName,
-        },
+      // Call edge function to create employee
+      const { data, error } = await supabase.functions.invoke('create-employee', {
+        body: validated,
       });
 
-      if (authError) throw authError;
-
-      // Create employee record
-      const { error: employeeError } = await supabase
-        .from('employees')
-        .insert({
-          user_id: authData.user.id,
-          employee_id: validated.employeeId,
-          department: validated.department,
-          position: validated.position,
-          work_location: validated.workLocation,
-          join_date: validated.joinDate,
-          reporting_manager_id: validated.reportingManagerId || null,
-          temporary_password: tempPassword,
-          must_change_password: true,
-          onboarding_status: 'pending',
-        });
-
-      if (employeeError) throw employeeError;
-
-      // Assign role
-      const { error: roleError } = await supabase
-        .from('user_roles')
-        .insert({
-          user_id: authData.user.id,
-          role: validated.role,
-        });
-
-      if (roleError) throw roleError;
+      if (error) throw error;
 
       toast({
         title: "Employee added successfully",
-        description: `Temporary password: ${tempPassword} (Please save this)`,
+        description: `Temporary password: ${data.temporaryPassword} (Please save this)`,
       });
 
       navigate('/employees');
