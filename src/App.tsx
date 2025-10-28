@@ -8,8 +8,8 @@ import { ProtectedRoute, PublicRoute } from "./components/ProtectedRoute";
 
 // Pages
 import Login from "./pages/auth/Login";
-import Signup from "./pages/auth/Signup";
 import FirstTimeLogin from "./pages/auth/FirstTimeLogin";
+import Signup from "./pages/auth/Signup";
 import Dashboard from "./pages/Dashboard";
 import Employees from "./pages/Employees";
 import EmployeeImport from "./pages/EmployeeImport";
