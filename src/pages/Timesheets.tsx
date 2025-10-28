@@ -51,40 +51,71 @@ export default function Timesheets() {
     if (!user) return;
 
     try {
-      // Fetch my timesheets
-      const { data: myData } = await supabase
+      // Get current employee ID first
+      const { data: currentEmployee } = await supabase
+        .from("employees")
+        .select("id")
+        .eq("user_id", user.id)
+        .single();
+
+      if (!currentEmployee) {
+        setLoading(false);
+        return;
+      }
+
+      // Fetch my timesheets with proper joins
+      const { data: myData, error: myError } = await supabase
         .from("timesheets")
         .select(`
           *,
           employee:employees!timesheets_employee_id_fkey(
-            profiles!employees_user_id_fkey(first_name, last_name)
+            id,
+            employee_id,
+            profiles:profiles!employees_user_id_fkey(first_name, last_name)
           ),
           reviewer:employees!timesheets_reviewed_by_fkey(
-            profiles!employees_user_id_fkey(first_name, last_name)
+            id,
+            profiles:profiles!employees_user_id_fkey(first_name, last_name)
           )
         `)
-        .eq("employee.user_id", user.id)
+        .eq("employee_id", currentEmployee.id)
         .order("submitted_at", { ascending: false });
 
-      if (myData) setMyTimesheets(myData as any);
+      if (myError) {
+        console.error("Error fetching my timesheets:", myError);
+      } else if (myData) {
+        setMyTimesheets(myData as any);
+      }
 
       // Fetch team timesheets if manager or above
       if (userRole && ["manager", "hr", "director", "ceo"].includes(userRole)) {
-        const { data: teamData } = await supabase
+        const { data: teamData, error: teamError } = await supabase
           .from("timesheets")
           .select(`
             *,
             employee:employees!timesheets_employee_id_fkey(
-              profiles!employees_user_id_fkey(first_name, last_name)
+              id,
+              employee_id,
+              reporting_manager_id,
+              profiles:profiles!employees_user_id_fkey(first_name, last_name)
             ),
             reviewer:employees!timesheets_reviewed_by_fkey(
-              profiles!employees_user_id_fkey(first_name, last_name)
+              id,
+              profiles:profiles!employees_user_id_fkey(first_name, last_name)
             )
           `)
           .eq("status", "pending")
           .order("submitted_at", { ascending: false });
 
-        if (teamData) setTeamTimesheets(teamData as any);
+        if (teamError) {
+          console.error("Error fetching team timesheets:", teamError);
+        } else if (teamData) {
+          // Filter to only show timesheets from direct reports
+          const filteredTeam = teamData.filter(
+            (ts: any) => ts.employee?.reporting_manager_id === currentEmployee.id
+          );
+          setTeamTimesheets(filteredTeam as any);
+        }
       }
     } catch (error) {
       console.error("Error fetching timesheets:", error);
@@ -218,7 +249,7 @@ export default function Timesheets() {
                           </div>
                           <div>
                             <p className="font-medium">
-                              {timesheet.employee.profiles.first_name} {timesheet.employee.profiles.last_name}
+                              {timesheet.employee?.profiles?.first_name || "Unknown"} {timesheet.employee?.profiles?.last_name || "Employee"}
                             </p>
                             <p className="text-sm text-muted-foreground">
                               Week: {new Date(timesheet.week_start_date).toLocaleDateString()} - {new Date(timesheet.week_end_date).toLocaleDateString()}
@@ -311,7 +342,7 @@ export default function Timesheets() {
                             Week: {new Date(timesheet.week_start_date).toLocaleDateString()} - {new Date(timesheet.week_end_date).toLocaleDateString()}
                           </p>
                           <p className="text-sm text-muted-foreground">{timesheet.total_hours} hours</p>
-                          {timesheet.status === "approved" && timesheet.reviewer && (
+                          {timesheet.status === "approved" && timesheet.reviewer?.profiles && (
                             <p className="text-xs text-muted-foreground">
                               Approved by {timesheet.reviewer.profiles.first_name} {timesheet.reviewer.profiles.last_name}
                             </p>

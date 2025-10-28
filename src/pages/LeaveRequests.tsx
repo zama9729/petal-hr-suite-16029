@@ -64,6 +64,18 @@ export default function LeaveRequests() {
     if (!user) return;
 
     try {
+      // Get current employee ID first
+      const { data: currentEmployee } = await supabase
+        .from("employees")
+        .select("id")
+        .eq("user_id", user.id)
+        .single();
+
+      if (!currentEmployee) {
+        setLoading(false);
+        return;
+      }
+
       // Fetch leave policies
       const { data: policiesData } = await supabase
         .from("leave_policies")
@@ -72,42 +84,61 @@ export default function LeaveRequests() {
 
       if (policiesData) setPolicies(policiesData);
 
-      // Fetch my leave requests
-      const { data: myData } = await supabase
+      // Fetch my leave requests with proper joins
+      const { data: myData, error: myError } = await supabase
         .from("leave_requests")
         .select(`
           *,
           employee:employees!leave_requests_employee_id_fkey(
-            profiles!employees_user_id_fkey(first_name, last_name)
+            id,
+            employee_id,
+            profiles:profiles!employees_user_id_fkey(first_name, last_name)
           ),
           reviewer:employees!leave_requests_reviewed_by_fkey(
-            profiles!employees_user_id_fkey(first_name, last_name)
+            id,
+            profiles:profiles!employees_user_id_fkey(first_name, last_name)
           ),
           leave_type:leave_policies(name)
         `)
-        .eq("employee.user_id", user.id)
+        .eq("employee_id", currentEmployee.id)
         .order("submitted_at", { ascending: false });
 
-      if (myData) setMyRequests(myData as any);
+      if (myError) {
+        console.error("Error fetching my leave requests:", myError);
+      } else if (myData) {
+        setMyRequests(myData as any);
+      }
 
       // Fetch team requests if manager or above
       if (userRole && ["manager", "hr", "director", "ceo"].includes(userRole)) {
-        const { data: teamData } = await supabase
+        const { data: teamData, error: teamError } = await supabase
           .from("leave_requests")
           .select(`
             *,
             employee:employees!leave_requests_employee_id_fkey(
-              profiles!employees_user_id_fkey(first_name, last_name)
+              id,
+              employee_id,
+              reporting_manager_id,
+              profiles:profiles!employees_user_id_fkey(first_name, last_name)
             ),
             reviewer:employees!leave_requests_reviewed_by_fkey(
-              profiles!employees_user_id_fkey(first_name, last_name)
+              id,
+              profiles:profiles!employees_user_id_fkey(first_name, last_name)
             ),
             leave_type:leave_policies(name)
           `)
           .eq("status", "pending")
           .order("submitted_at", { ascending: false });
 
-        if (teamData) setTeamRequests(teamData as any);
+        if (teamError) {
+          console.error("Error fetching team leave requests:", teamError);
+        } else if (teamData) {
+          // Filter to only show requests from direct reports
+          const filteredTeam = teamData.filter(
+            (req: any) => req.employee?.reporting_manager_id === currentEmployee.id
+          );
+          setTeamRequests(filteredTeam as any);
+        }
       }
     } catch (error) {
       console.error("Error fetching leave requests:", error);
@@ -247,7 +278,7 @@ export default function LeaveRequests() {
                           </div>
                           <div>
                             <p className="font-medium">
-                              {request.employee.profiles.first_name} {request.employee.profiles.last_name}
+                              {request.employee?.profiles?.first_name || "Unknown"} {request.employee?.profiles?.last_name || "Employee"}
                             </p>
                             <p className="text-sm text-muted-foreground">
                               {new Date(request.start_date).toLocaleDateString()} - {new Date(request.end_date).toLocaleDateString()}
@@ -357,7 +388,7 @@ export default function LeaveRequests() {
                           <p className="text-sm text-muted-foreground">
                             {request.total_days} days • {request.leave_type?.name || "General Leave"}
                           </p>
-                          {request.status === "approved" && request.reviewer && (
+                          {request.status === "approved" && request.reviewer?.profiles && (
                             <p className="text-xs text-muted-foreground">
                               Approved by {request.reviewer.profiles.first_name} {request.reviewer.profiles.last_name}
                             </p>
