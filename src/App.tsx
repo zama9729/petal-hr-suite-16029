@@ -26,6 +26,7 @@ import ChangePassword from "./pages/ChangePassword";
 import OrgChart from "./pages/OrgChart";
 import SetupPassword from "./pages/SetupPassword";
 import OnboardingTracker from "./pages/OnboardingTracker";
+import Settings from "./pages/Settings";
 
 const queryClient = new QueryClient();
 
@@ -63,6 +64,7 @@ const App = () => (
             <Route path="/org-chart" element={<ProtectedRoute><OrgChart /></ProtectedRoute>} />
             <Route path="/onboarding" element={<ProtectedRoute><Onboarding /></ProtectedRoute>} />
             <Route path="/change-password" element={<ProtectedRoute><ChangePassword /></ProtectedRoute>} />
+            <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
             
             {/* Redirects */}
             <Route path="/" element={<Navigate to="/dashboard" />} />

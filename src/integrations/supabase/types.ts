@@ -315,6 +315,7 @@ export type Database = {
           domain: string
           id: string
           industry: string | null
+          logo_url: string | null
           name: string
           timezone: string | null
           updated_at: string | null
@@ -325,6 +326,7 @@ export type Database = {
           domain: string
           id?: string
           industry?: string | null
+          logo_url?: string | null
           name: string
           timezone?: string | null
           updated_at?: string | null
@@ -335,6 +337,7 @@ export type Database = {
           domain?: string
           id?: string
           industry?: string | null
+          logo_url?: string | null
           name?: string
           timezone?: string | null
           updated_at?: string | null

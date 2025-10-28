@@ -61,27 +61,58 @@ export function AppSidebar() {
     timesheets: 0,
     leaves: 0,
   });
+  const [organization, setOrganization] = useState<{ name: string; logo_url: string | null } | null>(null);
 
   useEffect(() => {
-    if (user && userRole && ['manager', 'hr', 'director', 'ceo'].includes(userRole)) {
-      fetchPendingCounts();
+    if (user) {
+      fetchOrganization();
       
-      // Set up realtime subscriptions
-      const channel = supabase
-        .channel('sidebar-notifications')
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'timesheets' }, () => {
-          fetchPendingCounts();
-        })
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'leave_requests' }, () => {
-          fetchPendingCounts();
-        })
-        .subscribe();
+      if (userRole && ['manager', 'hr', 'director', 'ceo'].includes(userRole)) {
+        fetchPendingCounts();
+        
+        // Set up realtime subscriptions
+        const channel = supabase
+          .channel('sidebar-notifications')
+          .on('postgres_changes', { event: '*', schema: 'public', table: 'timesheets' }, () => {
+            fetchPendingCounts();
+          })
+          .on('postgres_changes', { event: '*', schema: 'public', table: 'leave_requests' }, () => {
+            fetchPendingCounts();
+          })
+          .subscribe();
 
-      return () => {
-        supabase.removeChannel(channel);
-      };
+        return () => {
+          supabase.removeChannel(channel);
+        };
+      }
     }
   }, [user, userRole]);
+
+  const fetchOrganization = async () => {
+    if (!user) return;
+
+    try {
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('tenant_id')
+        .eq('id', user.id)
+        .single();
+
+      if (profile?.tenant_id) {
+        const { data: org } = await supabase
+          .from('organizations')
+          .select('name, logo_url')
+          .eq('id', profile.tenant_id)
+          .single();
+
+        if (org) {
+          setOrganization(org);
+        }
+      }
+    } catch (error) {
+      console.error('Error fetching organization:', error);
+    }
+  };
 
   const fetchPendingCounts = async () => {
     if (!user) return;
@@ -133,11 +164,21 @@ export function AppSidebar() {
     <Sidebar>
       <SidebarHeader className="border-b border-sidebar-border p-4">
         <div className="flex items-center gap-2">
-          <div className="h-8 w-8 rounded-lg bg-primary flex items-center justify-center">
-            <Building2 className="h-5 w-5 text-primary-foreground" />
-          </div>
+          {organization?.logo_url ? (
+            <img 
+              src={organization.logo_url} 
+              alt={organization.name}
+              className="h-8 w-8 rounded-lg object-cover"
+            />
+          ) : (
+            <div className="h-8 w-8 rounded-lg bg-primary flex items-center justify-center">
+              <Building2 className="h-5 w-5 text-primary-foreground" />
+            </div>
+          )}
           <div>
-            <h2 className="text-sm font-semibold text-sidebar-foreground">HR Platform</h2>
+            <h2 className="text-sm font-semibold text-sidebar-foreground">
+              {organization?.name || 'HR Platform'}
+            </h2>
             <p className="text-xs text-sidebar-foreground/60">Powered by AI</p>
           </div>
         </div>
