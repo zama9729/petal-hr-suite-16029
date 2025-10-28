@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useState, useEffect } from "react";
+import { useNavigate, useLocation } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -31,8 +31,10 @@ const securityQuestions = [
 
 export default function SetupPassword() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
+  const [email, setEmail] = useState<string>("");
   const [formData, setFormData] = useState({
     password: "",
     confirmPassword: "",
@@ -43,59 +45,58 @@ export default function SetupPassword() {
   });
   const [errors, setErrors] = useState<Record<string, string>>({});
 
+  useEffect(() => {
+    // Get email from navigation state
+    const stateEmail = location.state?.email;
+    if (!stateEmail) {
+      toast({
+        title: "Access denied",
+        description: "Please use the first-time login page to access password setup",
+        variant: "destructive",
+      });
+      navigate('/auth/first-time-login');
+      return;
+    }
+    setEmail(stateEmail);
+  }, [location, navigate, toast]);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrors({});
+
+    if (!email) {
+      toast({
+        title: "Error",
+        description: "Email not found. Please start from the first-time login page.",
+        variant: "destructive",
+      });
+      return;
+    }
 
     try {
       const validated = passwordSchema.parse(formData);
       setLoading(true);
 
-      // Update password and remove needs_password_setup flag
-      const { error: passwordError } = await supabase.auth.updateUser({
-        password: validated.password,
-        data: {
-          needs_password_setup: false,
+      // Update the user's password using admin API via edge function
+      const { data: authData, error: authError } = await supabase.functions.invoke('setup-employee-password', {
+        body: { 
+          email,
+          password: validated.password,
+          securityQuestion1: validated.securityQuestion1,
+          securityAnswer1: validated.securityAnswer1.toLowerCase(),
+          securityQuestion2: validated.securityQuestion2,
+          securityAnswer2: validated.securityAnswer2.toLowerCase(),
         }
       });
 
-      if (passwordError) throw passwordError;
-
-      // Update employee record
-      const { data: { user } } = await supabase.auth.getUser();
-      
-      if (user) {
-        const { error: updateError } = await supabase
-          .from('employees')
-          .update({
-            must_change_password: false,
-            onboarding_status: 'in_progress',
-          })
-          .eq('user_id', user.id);
-
-        if (updateError) throw updateError;
-
-        // Store security questions (in a real app, hash these answers)
-        const { error: securityError } = await supabase
-          .from('profiles')
-          .update({
-            security_question_1: validated.securityQuestion1,
-            security_answer_1: validated.securityAnswer1.toLowerCase(),
-            security_question_2: validated.securityQuestion2,
-            security_answer_2: validated.securityAnswer2.toLowerCase(),
-          })
-          .eq('id', user.id);
-
-        if (securityError) console.error('Security questions error:', securityError);
-      }
+      if (authError) throw authError;
+      if (authData?.error) throw new Error(authData.error);
 
       toast({
         title: "Password set successfully",
         description: "Please log in with your new password",
       });
 
-      // Sign out and redirect to login
-      await supabase.auth.signOut();
       navigate('/auth/login');
     } catch (error: any) {
       if (error instanceof z.ZodError) {

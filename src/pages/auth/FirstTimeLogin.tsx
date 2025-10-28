@@ -19,29 +19,29 @@ export default function FirstTimeLogin() {
     setIsLoading(true);
 
     try {
-      // Send magic link for password setup
-      const { error: magicLinkError } = await supabase.auth.signInWithOtp({
-        email: email,
-        options: {
-          emailRedirectTo: `${window.location.origin}/setup-password`,
-        }
+      // Verify employee email and eligibility
+      const { data, error } = await supabase.functions.invoke('verify-employee-email', {
+        body: { email }
       });
 
-      if (magicLinkError) throw magicLinkError;
+      if (error) throw error;
 
-      toast({
-        title: "Check your email",
-        description: "We've sent you a magic link to set up your password.",
-      });
+      if (!data.valid) {
+        toast({
+          title: "Error",
+          description: data.error || "Unable to verify employee email",
+          variant: "destructive",
+        });
+        setIsLoading(false);
+        return;
+      }
 
-      // Wait a moment then redirect to login
-      setTimeout(() => {
-        navigate('/auth/login');
-      }, 3000);
+      // Navigate to setup password page with email
+      navigate('/setup-password', { state: { email } });
     } catch (error: any) {
       toast({
         title: "Error",
-        description: error.message || "Failed to send magic link. Please contact HR if this is your first time.",
+        description: error.message || "Failed to verify email. Please contact HR if this is your first time.",
         variant: "destructive",
       });
     } finally {
@@ -75,7 +75,7 @@ export default function FirstTimeLogin() {
               />
             </div>
             <div className="text-sm text-muted-foreground">
-              <p>We'll send you a secure link to set up your password.</p>
+              <p>Enter your email to set up your password and security questions.</p>
             </div>
           </CardContent>
           <CardFooter className="flex flex-col gap-4">
