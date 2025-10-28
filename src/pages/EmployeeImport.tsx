@@ -22,18 +22,31 @@ export default function EmployeeImport() {
     if (!file) return;
 
     setImporting(true);
-    // Simulate import
-    setTimeout(() => {
-      setResults({
-        imported: 12,
-        errors: ["Row 3: Invalid email format", "Row 7: Missing required field 'department'"],
-      });
-      setImporting(false);
+    try {
+      // TODO: Implement actual API call to import employees
+      const formData = new FormData();
+      formData.append('file', file);
+      
+      // const response = await fetch('/api/employees/import', {
+      //   method: 'POST',
+      //   body: formData
+      // });
+      // const data = await response.json();
+      // setResults(data);
+      
       toast({
-        title: "Import completed",
-        description: "12 employees imported successfully with 2 errors",
+        title: "Import started",
+        description: "Processing employee data...",
       });
-    }, 2000);
+    } catch (error) {
+      toast({
+        title: "Import failed",
+        description: "An error occurred during import",
+        variant: "destructive",
+      });
+    } finally {
+      setImporting(false);
+    }
   };
 
   const downloadTemplate = () => {

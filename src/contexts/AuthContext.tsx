@@ -57,34 +57,25 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setIsLoading(true);
     try {
       // TODO: Replace with actual API call
-      // const response = await fetch(`${API_BASE_URL}/auth/login`, {
-      //   method: 'POST',
-      //   headers: { 'Content-Type': 'application/json' },
-      //   body: JSON.stringify({ email, password })
-      // });
-      // const data = await response.json();
+      const response = await fetch(`/api/auth/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password })
+      });
+      
+      if (!response.ok) {
+        throw new Error('Login failed');
+      }
+      
+      const data = await response.json();
 
-      // Mock response for now
-      const mockData = {
-        token: 'mock-jwt-token',
-        refreshToken: 'mock-refresh-token',
-        tenantId: 'tenant-123',
-        user: {
-          id: 'user-1',
-          email,
-          name: 'Demo User',
-          tenantId: 'tenant-123',
-          roles: ['orgadmin'] as UserRole[],
-        },
-      };
+      setToken(data.token);
+      setUser(data.user);
+      setTenantId(data.tenantId);
 
-      setToken(mockData.token);
-      setUser(mockData.user);
-      setTenantId(mockData.tenantId);
-
-      localStorage.setItem('token', mockData.token);
-      localStorage.setItem('user', JSON.stringify(mockData.user));
-      localStorage.setItem('tenantId', mockData.tenantId);
+      localStorage.setItem('token', data.token);
+      localStorage.setItem('user', JSON.stringify(data.user));
+      localStorage.setItem('tenantId', data.tenantId);
     } catch (error) {
       console.error('Login failed:', error);
       throw error;
@@ -97,34 +88,25 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setIsLoading(true);
     try {
       // TODO: Replace with actual API call
-      // const response = await fetch(`${API_BASE_URL}/auth/signup`, {
-      //   method: 'POST',
-      //   headers: { 'Content-Type': 'application/json' },
-      //   body: JSON.stringify(data)
-      // });
-      // const result = await response.json();
+      const response = await fetch(`/api/auth/signup`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data)
+      });
+      
+      if (!response.ok) {
+        throw new Error('Signup failed');
+      }
+      
+      const result = await response.json();
 
-      // Mock response
-      const mockData = {
-        token: 'mock-jwt-token',
-        refreshToken: 'mock-refresh-token',
-        tenantId: 'tenant-new',
-        user: {
-          id: 'user-new',
-          email: data.adminEmail,
-          name: data.adminName,
-          tenantId: 'tenant-new',
-          roles: ['orgadmin'] as UserRole[],
-        },
-      };
+      setToken(result.token);
+      setUser(result.user);
+      setTenantId(result.tenantId);
 
-      setToken(mockData.token);
-      setUser(mockData.user);
-      setTenantId(mockData.tenantId);
-
-      localStorage.setItem('token', mockData.token);
-      localStorage.setItem('user', JSON.stringify(mockData.user));
-      localStorage.setItem('tenantId', mockData.tenantId);
+      localStorage.setItem('token', result.token);
+      localStorage.setItem('user', JSON.stringify(result.user));
+      localStorage.setItem('tenantId', result.tenantId);
     } catch (error) {
       console.error('Signup failed:', error);
       throw error;

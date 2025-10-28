@@ -7,47 +7,37 @@ import { Link } from "react-router-dom";
 const stats = [
   {
     title: "Total Employees",
-    value: "248",
-    change: "+12% from last month",
+    value: "0",
+    change: "No data yet",
     icon: Users,
-    trend: "up",
+    trend: "neutral",
   },
   {
     title: "Pending Approvals",
-    value: "23",
-    change: "8 timesheets, 15 leaves",
+    value: "0",
+    change: "No pending items",
     icon: Clock,
     trend: "neutral",
   },
   {
     title: "Active Leave Requests",
-    value: "15",
-    change: "5 need approval",
+    value: "0",
+    change: "No active requests",
     icon: Calendar,
     trend: "neutral",
   },
   {
     title: "Avg. Attendance",
-    value: "94.2%",
-    change: "+2.1% from last month",
+    value: "0%",
+    change: "No data yet",
     icon: TrendingUp,
-    trend: "up",
+    trend: "neutral",
   },
 ];
 
-const recentActivities = [
-  { id: 1, type: "leave", user: "Sarah Johnson", action: "submitted leave request", time: "2 hours ago" },
-  { id: 2, type: "timesheet", user: "Mike Chen", action: "submitted timesheet", time: "3 hours ago" },
-  { id: 3, type: "approval", user: "Lisa Anderson", action: "approved expense report", time: "4 hours ago" },
-  { id: 4, type: "employee", user: "New Employee", action: "joined the organization", time: "1 day ago" },
-];
+const recentActivities: Array<{ id: number; type: string; user: string; action: string; time: string }> = [];
 
-const pendingTasks = [
-  { id: 1, title: "Review 8 pending timesheets", priority: "high", link: "/timesheets" },
-  { id: 2, title: "Approve 5 leave requests", priority: "high", link: "/leaves" },
-  { id: 3, title: "Complete policy configuration", priority: "medium", link: "/policies" },
-  { id: 4, title: "Review workflow automations", priority: "low", link: "/workflows" },
-];
+const pendingTasks: Array<{ id: number; title: string; priority: string; link: string }> = [];
 
 export default function Dashboard() {
   return (
@@ -84,21 +74,27 @@ export default function Dashboard() {
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-3">
-              {pendingTasks.map((task) => (
-                <div key={task.id} className="flex items-center justify-between p-3 rounded-lg border bg-card hover:bg-muted/50 transition-colors">
-                  <div className="flex items-center gap-3">
-                    <div className={`h-2 w-2 rounded-full ${
-                      task.priority === 'high' ? 'bg-destructive' : 
-                      task.priority === 'medium' ? 'bg-warning' : 
-                      'bg-muted-foreground'
-                    }`} />
-                    <span className="text-sm">{task.title}</span>
-                  </div>
-                  <Button variant="ghost" size="sm" asChild>
-                    <Link to={task.link}>View</Link>
-                  </Button>
+              {pendingTasks.length === 0 ? (
+                <div className="text-center py-8 text-muted-foreground">
+                  <p className="text-sm">No pending tasks</p>
                 </div>
-              ))}
+              ) : (
+                pendingTasks.map((task) => (
+                  <div key={task.id} className="flex items-center justify-between p-3 rounded-lg border bg-card hover:bg-muted/50 transition-colors">
+                    <div className="flex items-center gap-3">
+                      <div className={`h-2 w-2 rounded-full ${
+                        task.priority === 'high' ? 'bg-destructive' : 
+                        task.priority === 'medium' ? 'bg-warning' : 
+                        'bg-muted-foreground'
+                      }`} />
+                      <span className="text-sm">{task.title}</span>
+                    </div>
+                    <Button variant="ghost" size="sm" asChild>
+                      <Link to={task.link}>View</Link>
+                    </Button>
+                  </div>
+                ))
+              )}
             </CardContent>
           </Card>
 
@@ -110,19 +106,25 @@ export default function Dashboard() {
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
-              {recentActivities.map((activity) => (
-                <div key={activity.id} className="flex items-start gap-3">
-                  <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
-                    <Users className="h-4 w-4 text-primary" />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm">
-                      <span className="font-medium">{activity.user}</span> {activity.action}
-                    </p>
-                    <p className="text-xs text-muted-foreground">{activity.time}</p>
-                  </div>
+              {recentActivities.length === 0 ? (
+                <div className="text-center py-8 text-muted-foreground">
+                  <p className="text-sm">No recent activity</p>
                 </div>
-              ))}
+              ) : (
+                recentActivities.map((activity) => (
+                  <div key={activity.id} className="flex items-start gap-3">
+                    <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
+                      <Users className="h-4 w-4 text-primary" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm">
+                        <span className="font-medium">{activity.user}</span> {activity.action}
+                      </p>
+                      <p className="text-xs text-muted-foreground">{activity.time}</p>
+                    </div>
+                  </div>
+                ))
+              )}
             </CardContent>
           </Card>
         </div>

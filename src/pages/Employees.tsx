@@ -20,13 +20,15 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Badge } from "@/components/ui/badge";
 
-const mockEmployees = [
-  { id: 1, name: "Sarah Johnson", email: "sarah.j@company.com", role: "Software Engineer", department: "Engineering", status: "active", joinDate: "2023-01-15" },
-  { id: 2, name: "Mike Chen", email: "mike.c@company.com", role: "Product Manager", department: "Product", status: "active", joinDate: "2022-11-20" },
-  { id: 3, name: "Lisa Anderson", email: "lisa.a@company.com", role: "HR Manager", department: "Human Resources", status: "active", joinDate: "2021-06-10" },
-  { id: 4, name: "James Wilson", email: "james.w@company.com", role: "Designer", department: "Design", status: "active", joinDate: "2023-03-01" },
-  { id: 5, name: "Emily Brown", email: "emily.b@company.com", role: "Sales Lead", department: "Sales", status: "on-leave", joinDate: "2022-08-15" },
-];
+const mockEmployees: Array<{
+  id: number;
+  name: string;
+  email: string;
+  role: string;
+  department: string;
+  status: string;
+  joinDate: string;
+}> = [];
 
 export default function Employees() {
   return (
@@ -82,40 +84,49 @@ export default function Employees() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {mockEmployees.map((employee) => (
-                    <TableRow key={employee.id} className="cursor-pointer hover:bg-muted/50">
-                      <TableCell className="font-medium">
-                        <Link to={`/employees/${employee.id}`} className="hover:underline">
-                          {employee.name}
-                        </Link>
-                      </TableCell>
-                      <TableCell>{employee.email}</TableCell>
-                      <TableCell>{employee.role}</TableCell>
-                      <TableCell>{employee.department}</TableCell>
-                      <TableCell>{new Date(employee.joinDate).toLocaleDateString()}</TableCell>
-                      <TableCell>
-                        <Badge variant={employee.status === 'active' ? 'default' : 'secondary'}>
-                          {employee.status}
-                        </Badge>
-                      </TableCell>
-                      <TableCell>
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <Button variant="ghost" size="icon">
-                              <MoreVertical className="h-4 w-4" />
-                            </Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end">
-                            <DropdownMenuItem asChild>
-                              <Link to={`/employees/${employee.id}`}>View Profile</Link>
-                            </DropdownMenuItem>
-                            <DropdownMenuItem>Edit</DropdownMenuItem>
-                            <DropdownMenuItem className="text-destructive">Deactivate</DropdownMenuItem>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
+                  {mockEmployees.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={7} className="text-center py-12 text-muted-foreground">
+                        <p>No employees found</p>
+                        <p className="text-sm mt-2">Get started by adding employees or importing from CSV</p>
                       </TableCell>
                     </TableRow>
-                  ))}
+                  ) : (
+                    mockEmployees.map((employee) => (
+                      <TableRow key={employee.id} className="cursor-pointer hover:bg-muted/50">
+                        <TableCell className="font-medium">
+                          <Link to={`/employees/${employee.id}`} className="hover:underline">
+                            {employee.name}
+                          </Link>
+                        </TableCell>
+                        <TableCell>{employee.email}</TableCell>
+                        <TableCell>{employee.role}</TableCell>
+                        <TableCell>{employee.department}</TableCell>
+                        <TableCell>{new Date(employee.joinDate).toLocaleDateString()}</TableCell>
+                        <TableCell>
+                          <Badge variant={employee.status === 'active' ? 'default' : 'secondary'}>
+                            {employee.status}
+                          </Badge>
+                        </TableCell>
+                        <TableCell>
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button variant="ghost" size="icon">
+                                <MoreVertical className="h-4 w-4" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                              <DropdownMenuItem asChild>
+                                <Link to={`/employees/${employee.id}`}>View Profile</Link>
+                              </DropdownMenuItem>
+                              <DropdownMenuItem>Edit</DropdownMenuItem>
+                              <DropdownMenuItem className="text-destructive">Deactivate</DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  )}
                 </TableBody>
               </Table>
             </div>
