@@ -1,0 +1,58 @@
+import { AppLayout } from "@/components/layout/AppLayout";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Save, Play } from "lucide-react";
+import { WorkflowCanvas } from "@/components/workflow/WorkflowCanvas";
+import { WorkflowToolbox } from "@/components/workflow/WorkflowToolbox";
+import { useState } from "react";
+
+export default function WorkflowEditor() {
+  const [workflowName, setWorkflowName] = useState("New Workflow");
+
+  return (
+    <AppLayout>
+      <div className="space-y-6">
+        <div className="flex items-center justify-between">
+          <div className="space-y-1">
+            <Input
+              value={workflowName}
+              onChange={(e) => setWorkflowName(e.target.value)}
+              className="text-2xl font-bold h-auto border-none p-0 focus-visible:ring-0"
+            />
+            <p className="text-muted-foreground">Design your automation workflow</p>
+          </div>
+          <div className="flex gap-2">
+            <Button variant="outline">
+              <Play className="mr-2 h-4 w-4" />
+              Test Run
+            </Button>
+            <Button>
+              <Save className="mr-2 h-4 w-4" />
+              Save & Publish
+            </Button>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-[300px_1fr] gap-6 h-[calc(100vh-16rem)]">
+          <Card className="overflow-hidden">
+            <CardHeader>
+              <CardTitle>Toolbox</CardTitle>
+              <CardDescription>Drag nodes to canvas</CardDescription>
+            </CardHeader>
+            <CardContent className="p-0">
+              <WorkflowToolbox />
+            </CardContent>
+          </Card>
+
+          <Card className="overflow-hidden">
+            <CardContent className="p-0 h-full">
+              <WorkflowCanvas />
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+    </AppLayout>
+  );
+}
