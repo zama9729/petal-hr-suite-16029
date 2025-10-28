@@ -19,9 +19,9 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Badge } from "@/components/ui/badge";
-
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/contexts/AuthContext";
 
 interface Employee {
   id: string;
@@ -38,15 +38,18 @@ interface Employee {
 }
 
 export default function Employees() {
+  const { user, userRole } = useAuth();
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     fetchEmployees();
-  }, []);
+  }, [user, userRole]);
 
   const fetchEmployees = async () => {
-    const { data } = await supabase
+    if (!user) return;
+
+    let query = supabase
       .from('employees')
       .select(`
         id,
@@ -56,36 +59,62 @@ export default function Employees() {
         status,
         join_date,
         user_id,
+        reporting_manager_id,
         profiles!employees_user_id_fkey(first_name, last_name, email)
-      `)
-      .order('created_at', { ascending: false });
+      `);
+
+    // If user is a manager, only show their team
+    if (userRole === 'manager') {
+      // First get the employee record for the current user
+      const { data: managerEmployee } = await supabase
+        .from('employees')
+        .select('id')
+        .eq('user_id', user.id)
+        .single();
+
+      if (managerEmployee) {
+        query = query.eq('reporting_manager_id', managerEmployee.id);
+      }
+    }
+
+    const { data } = await query.order('created_at', { ascending: false });
 
     if (data) setEmployees(data as any);
     setLoading(false);
   };
+
+  const isHROrAbove = userRole === 'hr' || userRole === 'director' || userRole === 'ceo';
 
   return (
     <AppLayout>
       <div className="space-y-6">
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-3xl font-bold">Employees</h1>
-            <p className="text-muted-foreground">Manage your organization's workforce</p>
+            <h1 className="text-3xl font-bold">
+              {userRole === 'manager' ? 'My Team' : 'Employees'}
+            </h1>
+            <p className="text-muted-foreground">
+              {userRole === 'manager' 
+                ? 'Manage your team members' 
+                : 'Manage your organization\'s workforce'}
+            </p>
           </div>
-          <div className="flex gap-2">
-            <Button variant="outline" asChild>
-              <Link to="/employees/import">
-                <Upload className="mr-2 h-4 w-4" />
-                Import CSV
-              </Link>
-            </Button>
-            <Button asChild>
-              <Link to="/employees/new">
-                <Plus className="mr-2 h-4 w-4" />
-                Add Employee
-              </Link>
-            </Button>
-          </div>
+          {isHROrAbove && (
+            <div className="flex gap-2">
+              <Button variant="outline" asChild>
+                <Link to="/employees/import">
+                  <Upload className="mr-2 h-4 w-4" />
+                  Import CSV
+                </Link>
+              </Button>
+              <Button asChild>
+                <Link to="/employees/new">
+                  <Plus className="mr-2 h-4 w-4" />
+                  Add Employee
+                </Link>
+              </Button>
+            </div>
+          )}
         </div>
 
         <Card>

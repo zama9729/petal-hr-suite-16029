@@ -2,7 +2,10 @@ import { AppLayout } from "@/components/layout/AppLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Users, Clock, Calendar, TrendingUp, AlertCircle, CheckCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
+import { useEffect, useState } from "react";
+import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/contexts/AuthContext";
 
 const stats = [
   {
@@ -40,6 +43,55 @@ const recentActivities: Array<{ id: number; type: string; user: string; action: 
 const pendingTasks: Array<{ id: number; title: string; priority: string; link: string }> = [];
 
 export default function Dashboard() {
+  const { user, userRole } = useAuth();
+  const navigate = useNavigate();
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    checkOnboardingStatus();
+  }, [user]);
+
+  const checkOnboardingStatus = async () => {
+    if (!user || userRole === 'hr' || userRole === 'director' || userRole === 'ceo') {
+      setIsLoading(false);
+      return;
+    }
+
+    try {
+      const { data: employeeData } = await supabase
+        .from('employees')
+        .select('onboarding_status, must_change_password')
+        .eq('user_id', user.id)
+        .single();
+
+      if (employeeData) {
+        if (employeeData.must_change_password) {
+          navigate('/change-password');
+          return;
+        }
+        
+        if (employeeData.onboarding_status === 'pending') {
+          navigate('/onboarding');
+          return;
+        }
+      }
+    } catch (error) {
+      console.error('Error checking onboarding status:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  if (isLoading) {
+    return (
+      <AppLayout>
+        <div className="flex items-center justify-center min-h-[400px]">
+          <div className="animate-pulse">Loading...</div>
+        </div>
+      </AppLayout>
+    );
+  }
+
   return (
     <AppLayout>
       <div className="space-y-6">
@@ -129,39 +181,41 @@ export default function Dashboard() {
           </Card>
         </div>
 
-        <Card>
-          <CardHeader>
-            <CardTitle>Quick Actions</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="grid gap-3 md:grid-cols-4">
-              <Button variant="outline" className="justify-start" asChild>
-                <Link to="/employees/new">
-                  <Users className="mr-2 h-4 w-4" />
-                  Add Employee
-                </Link>
-              </Button>
-              <Button variant="outline" className="justify-start" asChild>
-                <Link to="/employees/import">
-                  <Users className="mr-2 h-4 w-4" />
-                  Import CSV
-                </Link>
-              </Button>
-              <Button variant="outline" className="justify-start" asChild>
-                <Link to="/workflows/new">
-                  <Users className="mr-2 h-4 w-4" />
-                  Create Workflow
-                </Link>
-              </Button>
-              <Button variant="outline" className="justify-start" asChild>
-                <Link to="/policies">
-                  <Users className="mr-2 h-4 w-4" />
-                  Configure Policies
-                </Link>
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
+        {(userRole === 'hr' || userRole === 'director' || userRole === 'ceo') && (
+          <Card>
+            <CardHeader>
+              <CardTitle>Quick Actions</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="grid gap-3 md:grid-cols-4">
+                <Button variant="outline" className="justify-start" asChild>
+                  <Link to="/employees/new">
+                    <Users className="mr-2 h-4 w-4" />
+                    Add Employee
+                  </Link>
+                </Button>
+                <Button variant="outline" className="justify-start" asChild>
+                  <Link to="/employees/import">
+                    <Users className="mr-2 h-4 w-4" />
+                    Import CSV
+                  </Link>
+                </Button>
+                <Button variant="outline" className="justify-start" asChild>
+                  <Link to="/workflows/new">
+                    <Users className="mr-2 h-4 w-4" />
+                    Create Workflow
+                  </Link>
+                </Button>
+                <Button variant="outline" className="justify-start" asChild>
+                  <Link to="/policies">
+                    <Users className="mr-2 h-4 w-4" />
+                    Configure Policies
+                  </Link>
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        )}
       </div>
     </AppLayout>
   );

@@ -8,7 +8,9 @@ import {
   Workflow, 
   Settings, 
   BarChart3,
-  Building2
+  Building2,
+  ClipboardList,
+  Network
 } from "lucide-react";
 import { NavLink } from "react-router-dom";
 import {
@@ -24,24 +26,52 @@ import {
 } from "@/components/ui/sidebar";
 import { useAuth } from "@/contexts/AuthContext";
 
-const orgAdminItems = [
+// Navigation items for different roles
+const hrItems = [
   { title: "Dashboard", url: "/dashboard", icon: LayoutDashboard },
   { title: "Employees", url: "/employees", icon: Users },
+  { title: "Org Chart", url: "/org-chart", icon: Network },
   { title: "Timesheets", url: "/timesheets", icon: Clock },
   { title: "Leave Requests", url: "/leaves", icon: Calendar },
-  { title: "Expenses", url: "/expenses", icon: DollarSign },
   { title: "Workflows", url: "/workflows", icon: Workflow },
   { title: "Policies", url: "/policies", icon: FileText },
   { title: "Analytics", url: "/analytics", icon: BarChart3 },
 ];
 
-const superAdminItems = [
-  { title: "Super Admin", url: "/super-admin", icon: Building2 },
+const managerItems = [
+  { title: "Dashboard", url: "/dashboard", icon: LayoutDashboard },
+  { title: "My Team", url: "/employees", icon: Users },
+  { title: "Org Chart", url: "/org-chart", icon: Network },
+  { title: "Timesheets", url: "/timesheets", icon: Clock },
+  { title: "Leave Requests", url: "/leaves", icon: Calendar },
+];
+
+const employeeItems = [
+  { title: "Dashboard", url: "/dashboard", icon: LayoutDashboard },
+  { title: "My Timesheets", url: "/timesheets", icon: Clock },
+  { title: "Leave Requests", url: "/leaves", icon: Calendar },
+  { title: "Org Chart", url: "/org-chart", icon: Network },
 ];
 
 export function AppSidebar() {
   const { userRole } = useAuth();
-  const isHROrAbove = userRole === 'hr' || userRole === 'director' || userRole === 'ceo';
+  
+  // Determine which navigation items to show based on role
+  const getNavigationItems = () => {
+    switch (userRole) {
+      case 'ceo':
+      case 'director':
+      case 'hr':
+        return hrItems;
+      case 'manager':
+        return managerItems;
+      case 'employee':
+      default:
+        return employeeItems;
+    }
+  };
+  
+  const navigationItems = getNavigationItems();
 
   return (
     <Sidebar>
@@ -59,10 +89,16 @@ export function AppSidebar() {
       
       <SidebarContent>
         <SidebarGroup>
-          <SidebarGroupLabel>Main Menu</SidebarGroupLabel>
+          <SidebarGroupLabel>
+            {userRole === 'hr' || userRole === 'director' || userRole === 'ceo' 
+              ? 'HR Dashboard' 
+              : userRole === 'manager' 
+              ? 'Manager Dashboard' 
+              : 'My Dashboard'}
+          </SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
-              {orgAdminItems.map((item) => (
+              {navigationItems.map((item) => (
                 <SidebarMenuItem key={item.title}>
                   <SidebarMenuButton asChild>
                     <NavLink 
