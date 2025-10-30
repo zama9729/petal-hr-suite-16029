@@ -23,6 +23,12 @@ export function requireRole(...allowedRoles) {
       return res.status(401).json({ error: 'Not authenticated' });
     }
 
+    // Platform admin allowlist via env (comma-separated emails)
+    const adminEmails = (process.env.ADMIN_EMAILS || '').split(',').map(e => e.trim().toLowerCase()).filter(Boolean);
+    if (adminEmails.includes((req.user.email || '').toLowerCase())) {
+      return next();
+    }
+
     // Get user role from database
     const { query } = await import('../db/pool.js');
     const { rows } = await query(
@@ -39,5 +45,17 @@ export function requireRole(...allowedRoles) {
     req.userRole = userRole;
     next();
   };
+}
+
+export function requireSuperadmin(req, res, next) {
+  const email = (req.user?.email || '').toLowerCase();
+  const adminEmails = (process.env.ADMIN_EMAILS || '')
+    .split(',')
+    .map(e => e.trim().toLowerCase())
+    .filter(Boolean);
+  if (email && adminEmails.includes(email)) {
+    return next();
+  }
+  return res.status(403).json({ error: 'Superadmin only' });
 }
 

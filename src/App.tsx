@@ -32,6 +32,7 @@ import OrgChart from "./pages/OrgChart";
 import SetupPassword from "./pages/SetupPassword";
 import OnboardingTracker from "./pages/OnboardingTracker";
 import Settings from "./pages/Settings";
+import AdminDashboard from "./pages/AdminDashboard";
 
 const queryClient = new QueryClient();
 
@@ -62,6 +63,8 @@ const App = () => (
             <Route path="/workflows/:id/edit" element={<ProtectedRoute allowedRoles={['hr', 'director', 'ceo']}><WorkflowEditor /></ProtectedRoute>} />
             <Route path="/policies" element={<ProtectedRoute allowedRoles={['hr', 'director', 'ceo']}><LeavePolicies /></ProtectedRoute>} />
             <Route path="/analytics" element={<ProtectedRoute allowedRoles={['hr', 'director', 'ceo']}><Analytics /></ProtectedRoute>} />
+            {/* Admin page: login required; backend enforces superadmin */}
+            <Route path="/admin" element={<ProtectedRoute><AdminDashboard /></ProtectedRoute>} />
             
             {/* Common routes */}
             <Route path="/timesheets" element={<ProtectedRoute><Timesheets /></ProtectedRoute>} />

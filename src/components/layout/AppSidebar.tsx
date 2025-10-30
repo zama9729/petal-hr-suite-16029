@@ -74,10 +74,12 @@ export function AppSidebar() {
     leaves: 0,
   });
   const [organization, setOrganization] = useState<{ name: string; logo_url: string | null } | null>(null);
+  const [isSuperadmin, setIsSuperadmin] = useState(false);
 
   useEffect(() => {
     if (user) {
       fetchOrganization();
+      fetchIsSuperadmin();
       
       if (userRole && ['manager', 'hr', 'director', 'ceo'].includes(userRole)) {
         fetchPendingCounts();
@@ -104,6 +106,21 @@ export function AppSidebar() {
       }
     } catch (error) {
       console.error('Error fetching organization:', error);
+    }
+  };
+
+  const fetchIsSuperadmin = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) return;
+      const res = await fetch(`${import.meta.env.VITE_API_URL}/api/admin/access`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (!res.ok) return;
+      const data = await res.json();
+      setIsSuperadmin(!!data.superadmin);
+    } catch (e) {
+      // ignore
     }
   };
 
@@ -218,6 +235,16 @@ export function AppSidebar() {
                   <div className="px-3 py-2 text-sm text-muted-foreground">
                     Loading menu items...
                   </div>
+                </SidebarMenuItem>
+              )}
+              {isSuperadmin && (
+                <SidebarMenuItem>
+                  <SidebarMenuButton asChild>
+                    <NavLink to="/admin">
+                      <BarChart3 className="h-4 w-4" />
+                      <span>Admin</span>
+                    </NavLink>
+                  </SidebarMenuButton>
                 </SidebarMenuItem>
               )}
             </SidebarMenu>
