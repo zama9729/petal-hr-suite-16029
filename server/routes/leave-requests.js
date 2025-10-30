@@ -122,7 +122,7 @@ router.get('/', authenticateToken, async (req, res) => {
         (req) => req.employee?.profiles?.first_name || true // For now, show all pending
       );
 
-      // Fetch approved requests for the team
+      // Fetch approved requests for the team (excluding manager's own requests)
       const approvedRequestsResult = await query(
         `SELECT 
           lr.*,
@@ -152,9 +152,9 @@ router.get('/', authenticateToken, async (req, res) => {
         LEFT JOIN employees er ON lr.reviewed_by = er.id
         LEFT JOIN profiles p2 ON er.user_id = p2.id
         LEFT JOIN leave_policies lp ON lr.leave_type_id = lp.id
-        WHERE lr.tenant_id = $1 AND lr.status = 'approved'
+        WHERE lr.tenant_id = $1 AND lr.status = 'approved' AND lr.employee_id != $2
         ORDER BY lr.reviewed_at DESC`,
-        [tenantId]
+        [tenantId, employeeId]
       );
 
       approvedRequests = approvedRequestsResult.rows;
