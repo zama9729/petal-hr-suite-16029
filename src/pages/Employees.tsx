@@ -2,7 +2,7 @@ import { AppLayout } from "@/components/layout/AppLayout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
-import { Search, Plus, Upload, Download, MoreVertical } from "lucide-react";
+import { Search, Plus, Upload, Download, MoreVertical, Circle } from "lucide-react";
 import { Link } from "react-router-dom";
 import {
   Table,
@@ -30,6 +30,7 @@ interface Employee {
   department: string;
   position: string;
   status: string;
+  presence_status?: string;
   join_date: string;
   profiles?: {
     first_name?: string;
@@ -79,6 +80,16 @@ export default function Employees() {
   const handleShiftAssigned = () => {
     // Optionally refresh employees list
     // fetchEmployees();
+  };
+
+  const getPresenceColor = (status?: string) => {
+    switch (status) {
+      case 'online': return 'bg-green-500';
+      case 'away': return 'bg-yellow-500';
+      case 'break': return 'bg-blue-500';
+      case 'out_of_office': return 'bg-gray-500';
+      default: return 'bg-gray-400';
+    }
   };
 
   return (
@@ -138,19 +149,20 @@ export default function Employees() {
                     <TableHead>Department</TableHead>
                     <TableHead>Join Date</TableHead>
                     <TableHead>Status</TableHead>
+                    <TableHead>Presence</TableHead>
                     <TableHead className="w-12"></TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {loading ? (
                     <TableRow>
-                      <TableCell colSpan={7} className="text-center py-12">
+                      <TableCell colSpan={8} className="text-center py-12">
                         Loading employees...
                       </TableCell>
                     </TableRow>
                   ) : employees.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={7} className="text-center py-12 text-muted-foreground">
+                      <TableCell colSpan={8} className="text-center py-12 text-muted-foreground">
                         <p>No employees found</p>
                         <p className="text-sm mt-2">Get started by adding employees or importing from CSV</p>
                       </TableCell>
@@ -171,6 +183,14 @@ export default function Employees() {
                           <Badge variant={employee.status === 'active' ? 'default' : 'secondary'}>
                             {employee.status}
                           </Badge>
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex items-center gap-2">
+                            <Circle className={`h-2.5 w-2.5 ${getPresenceColor(employee.presence_status)} rounded-full`} fill="currentColor" />
+                            <span className="text-sm capitalize">
+                              {employee.presence_status?.replace('_', ' ') || 'Unknown'}
+                            </span>
+                          </div>
                         </TableCell>
                         <TableCell>
                           <DropdownMenu>

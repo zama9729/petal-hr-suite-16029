@@ -1,11 +1,13 @@
 import { AppLayout } from "@/components/layout/AppLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Users, Clock, Calendar, TrendingUp, AlertCircle, CheckCircle } from "lucide-react";
+import { Users, Clock, Calendar, TrendingUp, AlertCircle, CheckCircle, Circle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Link, useNavigate } from "react-router-dom";
 import { useEffect, useState } from "react";
 import { api } from "@/lib/api";
 import { useAuth } from "@/contexts/AuthContext";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { useToast } from "@/hooks/use-toast";
 
 interface DashboardStats {
   totalEmployees: number;
@@ -17,6 +19,7 @@ interface DashboardStats {
 export default function Dashboard() {
   const { user, userRole } = useAuth();
   const navigate = useNavigate();
+  const { toast } = useToast();
   const [isLoading, setIsLoading] = useState(true);
   const [stats, setStats] = useState<DashboardStats>({
     totalEmployees: 0,
@@ -24,10 +27,13 @@ export default function Dashboard() {
     leaveBalance: 0,
     avgAttendance: 0,
   });
+  const [presenceStatus, setPresenceStatus] = useState<string>('online');
+  const [hasActiveLeave, setHasActiveLeave] = useState(false);
 
   useEffect(() => {
     checkOnboardingStatus();
     fetchDashboardStats();
+    fetchPresenceStatus();
   }, [user]);
 
   const fetchDashboardStats = async () => {
@@ -67,6 +73,36 @@ export default function Dashboard() {
     }
   };
 
+  const fetchPresenceStatus = async () => {
+    if (!user) return;
+
+    try {
+      const presence = await api.getPresenceStatus();
+      setPresenceStatus(presence.presence_status || 'online');
+      setHasActiveLeave(presence.has_active_leave || false);
+    } catch (error) {
+      console.error('Error fetching presence status:', error);
+    }
+  };
+
+  const handlePresenceChange = async (newStatus: string) => {
+    try {
+      await api.updatePresenceStatus(newStatus as any);
+      setPresenceStatus(newStatus);
+      toast({
+        title: 'Status Updated',
+        description: `Your presence is now ${newStatus.replace('_', ' ')}`,
+      });
+    } catch (error: any) {
+      console.error('Error updating presence status:', error);
+      toast({
+        title: 'Error',
+        description: error.message || 'Failed to update presence status',
+        variant: 'destructive',
+      });
+    }
+  };
+
   const checkOnboardingStatus = async () => {
     if (!user || userRole === 'hr' || userRole === 'director' || userRole === 'ceo') {
       setIsLoading(false);
@@ -99,12 +135,66 @@ export default function Dashboard() {
     );
   }
 
+  const getPresenceColor = (status: string) => {
+    switch (status) {
+      case 'online': return 'bg-green-500';
+      case 'away': return 'bg-yellow-500';
+      case 'break': return 'bg-blue-500';
+      case 'out_of_office': return 'bg-gray-500';
+      default: return 'bg-gray-500';
+    }
+  };
+
+  const getPresenceLabel = (status: string) => {
+    if (status === 'out_of_office' && hasActiveLeave) {
+      return 'Out of Office (but available)';
+    }
+    return status.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase());
+  };
+
   return (
     <AppLayout>
       <div className="space-y-6">
-        <div>
-          <h1 className="text-3xl font-bold">Dashboard</h1>
-          <p className="text-muted-foreground">Overview of your organization</p>
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-3xl font-bold">Dashboard</h1>
+            <p className="text-muted-foreground">Overview of your organization</p>
+          </div>
+          {/* Presence Status Selector */}
+          <div className="flex items-center gap-3">
+            <Circle className={`h-3 w-3 ${getPresenceColor(presenceStatus)} rounded-full`} fill="currentColor" />
+            <Select value={presenceStatus} onValueChange={handlePresenceChange}>
+              <SelectTrigger className="w-[200px]">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="online">
+                  <div className="flex items-center gap-2">
+                    <Circle className="h-2 w-2 bg-green-500 rounded-full" fill="currentColor" />
+                    Online
+                  </div>
+                </SelectItem>
+                <SelectItem value="away">
+                  <div className="flex items-center gap-2">
+                    <Circle className="h-2 w-2 bg-yellow-500 rounded-full" fill="currentColor" />
+                    Away
+                  </div>
+                </SelectItem>
+                <SelectItem value="break">
+                  <div className="flex items-center gap-2">
+                    <Circle className="h-2 w-2 bg-blue-500 rounded-full" fill="currentColor" />
+                    Break
+                  </div>
+                </SelectItem>
+                <SelectItem value="out_of_office">
+                  <div className="flex items-center gap-2">
+                    <Circle className="h-2 w-2 bg-gray-500 rounded-full" fill="currentColor" />
+                    Out of Office
+                  </div>
+                </SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
         </div>
 
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">

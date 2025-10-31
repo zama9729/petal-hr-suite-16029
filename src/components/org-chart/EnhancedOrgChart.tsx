@@ -3,7 +3,7 @@ import { api } from "@/lib/api";
 import { Card, CardContent } from "@/components/ui/card";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
-import { Phone, Mail, MapPin } from "lucide-react";
+import { Phone, Mail, MapPin, Circle } from "lucide-react";
 
 interface Employee {
   id: string;
@@ -12,6 +12,7 @@ interface Employee {
   position: string | null;
   department: string | null;
   work_location: string | null;
+  presence_status?: string;
   reporting_manager_id: string | null;
   profiles: {
     first_name: string | null;
@@ -56,6 +57,16 @@ function buildTree(employees: Employee[]): TreeNode[] {
   return roots;
 }
 
+function getPresenceColor(status?: string) {
+  switch (status) {
+    case 'online': return 'bg-green-500';
+    case 'away': return 'bg-yellow-500';
+    case 'break': return 'bg-blue-500';
+    case 'out_of_office': return 'bg-gray-500';
+    default: return 'bg-gray-400';
+  }
+}
+
 function renderNode(node: TreeNode, level: number = 0): JSX.Element {
   if (!node.profiles) return <></>;
 
@@ -68,14 +79,23 @@ function renderNode(node: TreeNode, level: number = 0): JSX.Element {
       <Card className="w-80 hover:shadow-lg transition-all duration-300 border-2 hover:border-primary/50 bg-gradient-to-br from-card to-card/80">
         <CardContent className="p-6">
           <div className="flex items-start gap-4">
-            <Avatar className="h-16 w-16 border-2 border-primary/20">
-              <AvatarFallback className="bg-primary/10 text-primary text-lg font-semibold">
-                {initials}
-              </AvatarFallback>
-            </Avatar>
+            <div className="relative">
+              <Avatar className="h-16 w-16 border-2 border-primary/20">
+                <AvatarFallback className="bg-primary/10 text-primary text-lg font-semibold">
+                  {initials}
+                </AvatarFallback>
+              </Avatar>
+              {node.presence_status && (
+                <div className="absolute -bottom-1 -right-1">
+                  <Circle className={`h-4 w-4 ${getPresenceColor(node.presence_status)} rounded-full border-2 border-background`} fill="currentColor" />
+                </div>
+              )}
+            </div>
             
             <div className="flex-1 min-w-0">
-              <h3 className="font-bold text-lg text-foreground mb-1">{fullName}</h3>
+              <div className="flex items-center gap-2 mb-1">
+                <h3 className="font-bold text-lg text-foreground">{fullName}</h3>
+              </div>
               {node.position && (
                 <p className="text-sm font-medium text-primary mb-2">{node.position}</p>
               )}

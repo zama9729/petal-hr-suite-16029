@@ -413,6 +413,18 @@ class ApiClient {
       body: JSON.stringify({ decision, reason, workflow })
     });
   }
+
+  // Presence status methods
+  async updatePresenceStatus(presenceStatus: 'online' | 'away' | 'out_of_office' | 'break') {
+    return this.request('/api/profiles/me/presence', {
+      method: 'POST',
+      body: JSON.stringify({ presence_status: presenceStatus })
+    });
+  }
+
+  async getPresenceStatus() {
+    return this.request('/api/profiles/me/presence');
+  }
 }
 
 export const api = new ApiClient(API_URL);
