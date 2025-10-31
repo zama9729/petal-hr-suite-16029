@@ -9,10 +9,7 @@ import ReactFlow, {
   useReactFlow,
   ReactFlowProvider,
   Handle,
-  Position,
-  Connection,
-  Edge,
-  Node
+  Position
 } from 'reactflow';
 import 'reactflow/dist/style.css';
 import { Button } from '@/components/ui/button';
@@ -42,8 +39,8 @@ function BaseNode({ data }: { data: HrNodeData }) {
 const nodeTypes = { base: BaseNode } as const;
 
 function InnerCanvas() {
-  const [nodes, setNodes, onNodesChange] = useNodesState<Node<HrNodeData>[]>([]);
-  const [edges, setEdges, onEdgesChange] = useEdgesState<Edge[]>([]);
+  const [nodes, setNodes, onNodesChange] = useNodesState([] as any);
+  const [edges, setEdges, onEdgesChange] = useEdgesState([] as any);
   const [configOpen, setConfigOpen] = useState(false);
   const [activeNodeId, setActiveNodeId] = useState<string | null>(null);
   const [draftLabel, setDraftLabel] = useState('');
@@ -51,12 +48,16 @@ function InnerCanvas() {
   const activeNode = useMemo(() => nodes.find(n => n.id === activeNodeId), [nodes, activeNodeId]);
   const wrapperRef = useRef<HTMLDivElement>(null);
   const reactFlow = useReactFlow();
+  const [saveOpen, setSaveOpen] = useState(false);
+  const [saveName, setSaveName] = useState('New Workflow');
+  const [saveDesc, setSaveDesc] = useState('');
+  const [saving, setSaving] = useState(false);
 
-  const onConnect = useCallback((connection: Connection) => setEdges((eds) => addEdge({ ...connection, animated: true }, eds)), [setEdges]);
+  const onConnect = useCallback((connection: any) => setEdges((eds: any) => addEdge({ ...connection, animated: true }, eds)), [setEdges]);
 
   const addNode = (typeKey: string, label: string, x = 250, y = 100) => {
     const id = `n_${Date.now()}`;
-    setNodes((nds) => nds.concat({ id, type: 'base', position: { x, y }, data: { label, typeKey } }));
+    setNodes((nds: any) => nds.concat({ id, type: 'base', position: { x, y }, data: { label, typeKey } }));
   };
 
   const openConfig = (nodeId: string) => {
@@ -84,7 +85,7 @@ function InnerCanvas() {
     const position = reactFlow.project({ x, y });
 
     const id = `n_${Date.now()}`;
-    setNodes((nds) => nds.concat({ id, type: 'base', position, data: { label, typeKey } }));
+    setNodes((nds: any) => nds.concat({ id, type: 'base', position, data: { label, typeKey } }));
   }, [reactFlow, setNodes]);
 
   return (
@@ -102,6 +103,12 @@ function InnerCanvas() {
           onClick={() => { setNodes([]); setEdges([]); }}
           disabled={nodes.length === 0 && edges.length === 0}
         >Clear Canvas</Button>
+        <Button
+          variant="secondary"
+          size="sm"
+          onClick={() => setSaveOpen(true)}
+          disabled={nodes.length === 0}
+        >Save & Publish</Button>
         <Button
           variant="outline"
           size="sm"
@@ -143,6 +150,54 @@ function InnerCanvas() {
         <Controls />
         <Background gap={16} />
       </ReactFlow>
+
+      {/* Save dialog */}
+      <Dialog open={saveOpen} onOpenChange={setSaveOpen}>
+        <DialogContent>
+          <DialogHeader><DialogTitle>Save & Publish Workflow</DialogTitle></DialogHeader>
+          <div className="space-y-3 text-sm">
+            <div>
+              <div className="mb-1 font-medium">Name</div>
+              <Input value={saveName} onChange={e => setSaveName(e.target.value)} />
+            </div>
+            <div>
+              <div className="mb-1 font-medium">Description (optional)</div>
+              <Textarea value={saveDesc} onChange={e => setSaveDesc(e.target.value)} />
+            </div>
+            <div className="flex justify-end gap-2 pt-2">
+              <Button variant="outline" size="sm" onClick={() => setSaveOpen(false)}>Cancel</Button>
+              <Button size="sm" disabled={saving || !saveName.trim()} onClick={async () => {
+                try {
+                  setSaving(true);
+                  const token = api.token || localStorage.getItem('auth_token');
+                  const payload = {
+                    name: saveName.trim(),
+                    description: saveDesc.trim() || undefined,
+                    status: 'draft',
+                    workflow: {
+                      nodes: nodes.map(n => ({ id: n.id, type: (n.data as any).typeKey, label: (n.data as any).label, x: n.position.x, y: n.position.y, props: (n.data as any).props })),
+                      connections: edges.map(e => ({ from: String(e.source), to: String(e.target) }))
+                    }
+                  };
+                  const resp = await fetch(`${import.meta.env.VITE_API_URL}/api/workflows`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', Authorization: token ? `Bearer ${token}` : '' },
+                    body: JSON.stringify(payload)
+                  });
+                  const data = await resp.json();
+                  if (!resp.ok) throw new Error(data?.error || 'Save failed');
+                  setSaveOpen(false);
+                  setSaving(false);
+                  alert('Workflow saved');
+                } catch (e: any) {
+                  setSaving(false);
+                  alert(e?.message || 'Save failed');
+                }
+              }}>Save</Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={configOpen} onOpenChange={setConfigOpen}>
         <DialogContent>
