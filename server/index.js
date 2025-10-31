@@ -25,6 +25,8 @@ import employeeProjectsRoutes from './routes/employee-projects.js';
 import holidaysRoutes from './routes/holidays.js';
 import calendarRoutes from './routes/calendar.js';
 import analyticsRoutes from './routes/analytics.js';
+import employeeStatsRoutes from './routes/employee-stats.js';
+import migrationsRoutes from './routes/migrations.js';
 import aiRoutes from './routes/ai.js';
 import importsRoutes from './routes/imports.js';
 import { setTenantContext } from './middleware/tenant.js';
@@ -81,6 +83,8 @@ app.use('/api/v1', authenticateToken, setTenantContext, employeeProjectsRoutes);
 app.use('/api', authenticateToken, setTenantContext, holidaysRoutes);
 app.use('/api/calendar', calendarRoutes);
 app.use('/api/analytics', authenticateToken, analyticsRoutes);
+app.use('/api/employee-stats', authenticateToken, employeeStatsRoutes);
+app.use('/api/migrations', migrationsRoutes);
 
 // Public discovery endpoint for AI tools (requires API key in header)
 app.get('/discovery', (req, res, next) => {

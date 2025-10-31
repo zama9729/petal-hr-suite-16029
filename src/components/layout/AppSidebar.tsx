@@ -49,6 +49,7 @@ const hrItems = [
   { title: "Holiday Management", url: "/holidays", icon: Calendar, showBadge: false },
   { title: "Policies", url: "/policies", icon: FileText, showBadge: false },
   { title: "Analytics", url: "/analytics", icon: BarChart3, showBadge: false },
+  { title: "Employee Stats", url: "/employee-stats", icon: Users, showBadge: false },
   { title: "AI Assistant", url: "/ai-assistant", icon: Bot, showBadge: false },
 ];
 

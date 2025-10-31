@@ -250,6 +250,24 @@ class ApiClient {
     return this.request('/api/employees?team=mine');
   }
 
+  // Employee project assignments
+  async getEmployeeProjects(employeeId: string, date?: string) {
+    const url = date 
+      ? `/api/timesheets/employee/${employeeId}/projects?date=${date}`
+      : `/api/timesheets/employee/${employeeId}/projects`;
+    return this.request(url);
+  }
+
+  // Employee statistics
+  async getEmployeeStats(params?: { startDate?: string; endDate?: string; employeeId?: string }) {
+    const queryParams = new URLSearchParams();
+    if (params?.startDate) queryParams.append('startDate', params.startDate);
+    if (params?.endDate) queryParams.append('endDate', params.endDate);
+    if (params?.employeeId) queryParams.append('employeeId', params.employeeId);
+    const url = `/api/employee-stats${queryParams.toString() ? '?' + queryParams.toString() : ''}`;
+    return this.request(url);
+  }
+
   // Leave policy methods
   async getLeavePolicies() {
     return this.request('/api/leave-policies');

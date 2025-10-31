@@ -41,6 +41,7 @@ import EmployeeDetail from "./pages/EmployeeDetail";
 import MyProfile from "./pages/MyProfile";
 import ProjectCalendar from "./pages/ProjectCalendar";
 import HolidayManagement from "./pages/HolidayManagement";
+import EmployeeStats from "./pages/EmployeeStats";
 
 const queryClient = new QueryClient();
 
@@ -75,6 +76,7 @@ const App = () => (
             <Route path="/policies" element={<ProtectedRoute allowedRoles={['hr', 'director', 'ceo']}><LeavePolicies /></ProtectedRoute>} />
             <Route path="/holidays" element={<ProtectedRoute allowedRoles={['hr', 'director', 'ceo']}><HolidayManagement /></ProtectedRoute>} />
             <Route path="/analytics" element={<ProtectedRoute allowedRoles={['hr', 'director', 'ceo']}><Analytics /></ProtectedRoute>} />
+            <Route path="/employee-stats" element={<ProtectedRoute allowedRoles={['hr', 'director', 'ceo']}><EmployeeStats /></ProtectedRoute>} />
             <Route path="/ceo/dashboard" element={<ProtectedRoute allowedRoles={['hr','director','ceo']}><CEODashboard /></ProtectedRoute>} />
             <Route path="/projects/new" element={<ProtectedRoute allowedRoles={['hr','director','ceo']}><ProjectNew /></ProtectedRoute>} />
             <Route path="/projects/:id/suggestions" element={<ProtectedRoute allowedRoles={['hr','director','ceo']}><ProjectSuggestions /></ProtectedRoute>} />

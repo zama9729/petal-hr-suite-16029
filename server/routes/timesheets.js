@@ -50,6 +50,80 @@ async function persistHolidayEntries(timesheetId, orgId, employee, month, existi
 
 const router = express.Router();
 
+// Get employee project assignments
+router.get('/employee/:employeeId/projects', authenticateToken, async (req, res) => {
+  try {
+    const { employeeId } = req.params;
+    const { date } = req.query; // Optional date filter for active assignments
+    
+    // Check if employee is viewing their own data or user has HR/CEO role
+    const empCheck = await query(
+      'SELECT e.id, e.tenant_id FROM employees e WHERE e.id = $1 AND e.user_id = $2',
+      [employeeId, req.user.id]
+    );
+    
+    // Check if user has HR/CEO role
+    const roleCheck = await query(
+      'SELECT role FROM user_roles WHERE user_id = $1 AND role IN (\'hr\', \'director\', \'ceo\')',
+      [req.user.id]
+    );
+    
+    let tenantId = null;
+    
+    if (empCheck.rows.length > 0) {
+      // Employee viewing their own data
+      tenantId = empCheck.rows[0].tenant_id;
+    } else if (roleCheck.rows.length > 0) {
+      // HR/CEO viewing any employee's data - verify same org
+      const tenantRes = await query('SELECT tenant_id FROM profiles WHERE id = $1', [req.user.id]);
+      const userTenantId = tenantRes.rows[0]?.tenant_id;
+      const empTenantRes = await query('SELECT tenant_id FROM employees WHERE id = $1', [employeeId]);
+      const empTenantId = empTenantRes.rows[0]?.tenant_id;
+      
+      if (!userTenantId || userTenantId !== empTenantId) {
+        return res.status(403).json({ error: 'Unauthorized' });
+      }
+      
+      tenantId = userTenantId;
+    } else {
+      return res.status(403).json({ error: 'Unauthorized' });
+    }
+    
+    let assignmentsQuery = `
+      SELECT 
+        a.id,
+        a.project_id,
+        p.name as project_name,
+        a.role,
+        a.allocation_percent,
+        a.start_date,
+        a.end_date
+      FROM assignments a
+      JOIN projects p ON p.id = a.project_id
+      WHERE a.employee_id = $1
+    `;
+    
+    const params = [employeeId];
+    
+    if (date) {
+      assignmentsQuery += ` AND a.start_date <= $2 AND (a.end_date IS NULL OR a.end_date >= $2)`;
+      params.push(date);
+    } else {
+      // Get all active assignments (end_date is null or in future)
+      assignmentsQuery += ` AND (a.end_date IS NULL OR a.end_date >= CURRENT_DATE)`;
+    }
+    
+    assignmentsQuery += ` ORDER BY a.start_date DESC`;
+    
+    const result = await query(assignmentsQuery, params);
+    
+    res.json(result.rows);
+  } catch (error) {
+    console.error('Error fetching employee projects:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // Get employee ID for current user
 router.get('/employee-id', authenticateToken, async (req, res) => {
   try {
@@ -180,7 +254,7 @@ router.get('/pending', authenticateToken, async (req, res) => {
     const timesheetsWithEntries = await Promise.all(
       result.rows.map(async (timesheet) => {
         const entriesResult = await query(
-          'SELECT id, work_date, hours, description FROM timesheet_entries WHERE timesheet_id = $1 ORDER BY work_date',
+          'SELECT id, work_date, hours, description, project_id, project_type FROM timesheet_entries WHERE timesheet_id = $1 ORDER BY work_date',
           [timesheet.id]
         );
         return {
@@ -382,22 +456,47 @@ router.post('/', authenticateToken, async (req, res) => {
             continue; // Skip regular entry if holiday exists for this date
           }
           
+          // Determine project_id and project_type from entry
+          let projectId = null;
+          let projectType = null;
+          let description = entry.description || '';
+          
+          // If project_id is provided, use it (assigned project)
+          // Note: project_type should be NULL when project_id is set
+          if (entry.project_id) {
+            projectId = entry.project_id;
+            projectType = null; // Don't set project_type for assigned projects
+          } else if (entry.project_type) {
+            // If project_type is provided (non-billable or internal)
+            projectType = entry.project_type;
+            if (projectType === 'non-billable') {
+              description = 'Non-billable project';
+            } else if (projectType === 'internal') {
+              description = 'Internal project';
+            }
+          }
+          
           console.log('Inserting entry:', {
             timesheetId,
             tenantId,
             work_date: workDate,
             hours: Number(entry.hours) || 0,
+            project_id: projectId,
+            project_type: projectType,
+            description,
           });
           
           await query(
-            `INSERT INTO timesheet_entries (timesheet_id, tenant_id, work_date, hours, description, is_holiday)
-             VALUES ($1, $2, $3, $4, $5, false)`,
+            `INSERT INTO timesheet_entries (timesheet_id, tenant_id, work_date, hours, description, is_holiday, project_id, project_type)
+             VALUES ($1, $2, $3, $4, $5, false, $6, $7)`,
             [
               timesheetId,
               tenantId,
               workDate,
               Number(entry.hours) || 0,
-              entry.description || '',
+              description,
+              projectId,
+              projectType,
             ]
           );
         }
