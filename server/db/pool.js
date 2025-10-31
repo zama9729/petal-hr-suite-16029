@@ -49,7 +49,14 @@ export async function withClient(fn, tenantId) {
   const client = await pool.connect();
   try {
     if (tenantId) {
-      await client.query('SET SESSION app.current_tenant = $1', [tenantId]);
+      // PostgreSQL SET SESSION doesn't support parameters, so we need to format it
+      // Validate it's a UUID format (basic check)
+      const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+      if (uuidRegex.test(tenantId)) {
+        await client.query(`SET SESSION app.current_tenant = '${tenantId}'`);
+      } else {
+        throw new Error(`Invalid tenant ID format: ${tenantId}`);
+      }
     }
     const result = await fn(client);
     return result;

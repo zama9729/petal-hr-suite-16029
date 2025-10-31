@@ -10,8 +10,21 @@ export default function EmployeeCertificationsEditor({ employeeId, canEdit = fal
 
   const load = async () => {
     if (!employeeId) return;
-    const r = await fetch(`${import.meta.env.VITE_API_URL}/api/v1/employees/${employeeId}/certifications`, { headers: { Authorization: `Bearer ${api.token || localStorage.getItem('auth_token')}` } }).then(r => r.json());
-    setCerts(r);
+    try {
+      const resp = await fetch(`${import.meta.env.VITE_API_URL}/api/v1/employees/${employeeId}/certifications`, { 
+        headers: { Authorization: `Bearer ${api.token || localStorage.getItem('auth_token')}` } 
+      });
+      const data = await resp.json();
+      if (resp.ok && Array.isArray(data)) {
+        setCerts(data);
+      } else {
+        console.error('Failed to load certifications:', data);
+        setCerts([]);
+      }
+    } catch (error) {
+      console.error('Error loading certifications:', error);
+      setCerts([]);
+    }
   };
   useEffect(() => { load(); }, [employeeId]);
 

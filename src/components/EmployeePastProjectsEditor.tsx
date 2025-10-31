@@ -10,8 +10,22 @@ export default function EmployeePastProjectsEditor({ employeeId, canEdit = false
   const [form, setForm] = useState({ project_name: '', role: '', start_date: '', end_date: '', technologies: '', description: '' });
 
   const load = async () => {
-    const r = await fetch(`${import.meta.env.VITE_API_URL}/api/v1/employees/${employeeId}/projects`, { headers: { Authorization: `Bearer ${api.token || localStorage.getItem('auth_token')}` } }).then(r => r.json());
-    setItems(r);
+    if (!employeeId) return;
+    try {
+      const resp = await fetch(`${import.meta.env.VITE_API_URL}/api/v1/employees/${employeeId}/projects`, { 
+        headers: { Authorization: `Bearer ${api.token || localStorage.getItem('auth_token')}` } 
+      });
+      const data = await resp.json();
+      if (resp.ok && Array.isArray(data)) {
+        setItems(data);
+      } else {
+        console.error('Failed to load past projects:', data);
+        setItems([]);
+      }
+    } catch (error) {
+      console.error('Error loading past projects:', error);
+      setItems([]);
+    }
   };
   useEffect(() => { if (employeeId) load(); }, [employeeId]);
 

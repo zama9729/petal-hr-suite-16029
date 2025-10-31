@@ -12,9 +12,21 @@ export default function EmployeeSkillsEditor({ employeeId, canEdit = false }: { 
 
   const load = async () => {
     if (!employeeId) return;
-    const s = await fetch(`${import.meta.env.VITE_API_URL}/api/v1/employees/${employeeId}/skills`, { headers: { Authorization: `Bearer ${api.token || localStorage.getItem('auth_token')}` } })
-      .then(r => r.json());
-    setSkills(s);
+    try {
+      const resp = await fetch(`${import.meta.env.VITE_API_URL}/api/v1/employees/${employeeId}/skills`, { 
+        headers: { Authorization: `Bearer ${api.token || localStorage.getItem('auth_token')}` } 
+      });
+      const data = await resp.json();
+      if (resp.ok && Array.isArray(data)) {
+        setSkills(data);
+      } else {
+        console.error('Failed to load skills:', data);
+        setSkills([]);
+      }
+    } catch (error) {
+      console.error('Error loading skills:', error);
+      setSkills([]);
+    }
   };
 
   useEffect(() => { load(); }, [employeeId]);
