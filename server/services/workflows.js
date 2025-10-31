@@ -1,4 +1,3 @@
-import fetch from 'node-fetch';
 import { query } from '../db/pool.js';
 
 function getEnv(name, def) {

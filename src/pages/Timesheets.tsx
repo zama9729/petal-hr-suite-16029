@@ -10,8 +10,6 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
 import { addDays, startOfWeek, format, isSameDay } from "date-fns";
 import { AppLayout } from "@/components/layout/AppLayout";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Calendar } from "@/components/ui/calendar";
 
 interface TimesheetEntry {
   id?: string;
@@ -54,7 +52,9 @@ export default function Timesheets() {
   const { user } = useAuth();
   const { toast } = useToast();
 
-  const weekDays = Array.from({ length: 7 }, (_, i) => addDays(currentWeek, i));
+  const weekDays = useMemo(() => {
+    return Array.from({ length: 7 }, (_, i) => addDays(currentWeek, i));
+  }, [currentWeek]);
 
   const fetchEmployeeInfo = async () => {
     try {
@@ -544,54 +544,31 @@ export default function Timesheets() {
             </div>
           )}
           
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setCurrentWeek(startOfWeek(new Date(), { weekStartsOn: 1 }))}
-          >
-            Today
-          </Button>
-          
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setCurrentWeek(addDays(currentWeek, -7))}
-          >
-            ← Prev
-          </Button>
-          
-          <Popover>
-            <PopoverTrigger asChild>
-              <Button
-                variant="outline"
-                size="sm"
-                className="w-[200px] justify-start text-left font-normal"
-              >
-                <CalendarIcon className="mr-2 h-4 w-4" />
-                {format(currentWeek, "MMM dd")} - {format(addDays(currentWeek, 6), "MMM dd, yyyy")}
-              </Button>
-            </PopoverTrigger>
-            <PopoverContent className="w-auto p-0" align="end">
-              <Calendar
-                mode="single"
-                selected={currentWeek}
-                onSelect={(date) => {
-                  if (date) {
-                    setCurrentWeek(startOfWeek(date, { weekStartsOn: 1 }));
-                  }
-                }}
-                initialFocus
-              />
-            </PopoverContent>
-          </Popover>
-          
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setCurrentWeek(addDays(currentWeek, 7))}
-          >
-            Next →
-          </Button>
+          <div className="flex gap-2 items-center">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setCurrentWeek(startOfWeek(new Date(), { weekStartsOn: 1 }))}
+            >
+              Today
+            </Button>
+            
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setCurrentWeek(addDays(currentWeek, -7))}
+            >
+              ← Prev
+            </Button>
+            
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setCurrentWeek(addDays(currentWeek, 7))}
+            >
+              Next →
+            </Button>
+          </div>
         </div>
       </div>
 
@@ -625,7 +602,7 @@ export default function Timesheets() {
                         <div className="flex items-center justify-center gap-1">
                           {format(day, "EEE")}
                           {hasShift && (
-                            <Calendar className="h-3 w-3 text-primary" title="Scheduled shift" />
+                            <CalendarIcon className="h-3 w-3 text-primary" title="Scheduled shift" />
                           )}
                         </div>
                         <div className="text-sm font-normal text-muted-foreground">
@@ -658,7 +635,7 @@ export default function Timesheets() {
                         )}
                         {isHoliday && (
                           <Badge variant="outline" className="mb-1 text-xs bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400">
-                            <Calendar className="h-3 w-3 mr-1" />
+                            <CalendarIcon className="h-3 w-3 mr-1" />
                             Holiday
                           </Badge>
                         )}
@@ -737,7 +714,7 @@ export default function Timesheets() {
         <CardHeader>
           <CardTitle className="flex items-center justify-between">
             <span className="flex items-center gap-2">
-              <Calendar className="h-5 w-5" />
+              <CalendarIcon className="h-5 w-5" />
               Holiday Calendar ({new Date().getFullYear()})
             </span>
             <Select value={selectedState || 'all'} onValueChange={(v) => setSelectedState(v)}>
@@ -790,7 +767,7 @@ export default function Timesheets() {
             </div>
           ) : (
             <div className="text-center py-8 text-muted-foreground">
-              <Calendar className="h-12 w-12 mx-auto mb-2 opacity-50" />
+              <CalendarIcon className="h-12 w-12 mx-auto mb-2 opacity-50" />
               <p>No holidays available for the selected state</p>
               <p className="text-sm mt-2">Contact HR to add holiday lists for your state</p>
             </div>
