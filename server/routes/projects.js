@@ -6,29 +6,72 @@ const router = express.Router();
 
 // Create project
 router.post('/', authenticateToken, async (req, res) => {
-  const { name, start_date, end_date, required_skills, required_certifications, priority, expected_allocation_percent, location } = req.body || {};
-  if (!name) return res.status(400).json({ error: 'name required' });
-  const t = await query('SELECT tenant_id FROM profiles WHERE id=$1', [req.user.id]);
-  const org = t.rows[0]?.tenant_id; if (!org) return res.status(403).json({ error: 'No org' });
-  const result = await query(
-    `INSERT INTO projects (org_id, name, start_date, end_date, required_skills, required_certifications, priority, expected_allocation_percent, location)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
-     RETURNING *`,
-    [org, name, start_date || null, end_date || null, required_skills || [], required_certifications || [], priority || 0, expected_allocation_percent || 50, location || null]
-  );
-  res.json(result.rows[0]);
+  try {
+    const { name, start_date, end_date, required_skills, required_certifications, priority, expected_allocation_percent, location } = req.body || {};
+    if (!name) {
+      return res.status(400).json({ error: 'name required' });
+    }
+    const t = await query('SELECT tenant_id FROM profiles WHERE id=$1', [req.user.id]);
+    const org = t.rows[0]?.tenant_id;
+    if (!org) {
+      return res.status(403).json({ error: 'No org' });
+    }
+    
+    // Ensure required_skills is a valid JSON array (not double-encoded)
+    let skillsJson = required_skills || [];
+    // If it's already a string, try to parse it (could be double-encoded)
+    if (typeof skillsJson === 'string') {
+      try {
+        skillsJson = JSON.parse(skillsJson);
+        // If parsing returns a string, it was double-encoded, parse again
+        if (typeof skillsJson === 'string') {
+          skillsJson = JSON.parse(skillsJson);
+        }
+      } catch (e) {
+        console.error('Error parsing required_skills:', e, 'Raw:', skillsJson);
+        return res.status(400).json({ error: 'Invalid required_skills format' });
+      }
+    }
+    if (!Array.isArray(skillsJson)) {
+      return res.status(400).json({ error: 'required_skills must be an array' });
+    }
+    
+    const result = await query(
+      `INSERT INTO projects (org_id, name, start_date, end_date, required_skills, required_certifications, priority, expected_allocation_percent, location)
+       VALUES ($1,$2,$3,$4,$5::jsonb,$6,$7,$8,$9)
+       RETURNING *`,
+      [org, name, start_date || null, end_date || null, JSON.stringify(skillsJson), required_certifications || [], priority || 0, expected_allocation_percent || 50, location || null]
+    );
+    res.json(result.rows[0]);
+  } catch (error) {
+    console.error('Error creating project:', error);
+    res.status(500).json({ error: error.message || 'Failed to create project' });
+  }
 });
 
 // Suggest candidates (delegates to AI service)
 router.post('/:id/suggest-candidates', authenticateToken, async (req, res) => {
-  const { id } = req.params;
-  const projectRes = await query('SELECT * FROM projects WHERE id = $1', [id]);
-  if (projectRes.rows.length === 0) return res.status(404).json({ error: 'Project not found' });
-  const project = projectRes.rows[0];
-  const { suggestCandidates } = await import('../services/ai/suggester.js');
-  const suggestions = await suggestCandidates(project, req.body || {});
-  await query('INSERT INTO ai_suggestion_logs (project_id, request_payload, response_payload, computed_by) VALUES ($1,$2,$3,$4)', [id, req.body || {}, suggestions, 'ai-suggester-v1']);
-  res.json({ candidates: suggestions });
+  try {
+    const { id } = req.params;
+    const projectRes = await query('SELECT * FROM projects WHERE id = $1', [id]);
+    if (projectRes.rows.length === 0) {
+      return res.status(404).json({ error: 'Project not found' });
+    }
+    const project = projectRes.rows[0];
+    const { suggestCandidates } = await import('../services/ai/suggester.js');
+    const suggestions = await suggestCandidates(project, req.body || {});
+    
+    // Save logs with proper JSONB formatting
+    await query(
+      'INSERT INTO ai_suggestion_logs (project_id, request_payload, response_payload, computed_by) VALUES ($1,$2::jsonb,$3::jsonb,$4)',
+      [id, JSON.stringify(req.body || {}), JSON.stringify(suggestions), 'ai-suggester-v1']
+    );
+    
+    res.json({ candidates: suggestions });
+  } catch (error) {
+    console.error('Error suggesting candidates:', error);
+    res.status(500).json({ error: error.message || 'Failed to suggest candidates' });
+  }
 });
 
 // Assign candidate
