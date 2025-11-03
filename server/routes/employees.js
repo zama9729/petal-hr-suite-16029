@@ -168,8 +168,46 @@ router.get('/:id', authenticateToken, async (req, res) => {
       return res.status(403).json({ error: 'No organization found' });
     }
     
-    // Get employee with profile data
+    // Get employee with profile data, reporting manager info, and organization info
     const employeeResult = await query(
+      `SELECT 
+        e.*,
+        json_build_object(
+          'first_name', p.first_name,
+          'last_name', p.last_name,
+          'email', p.email,
+          'phone', p.phone
+        ) as profiles,
+        json_build_object(
+          'id', mgr_e.id,
+          'employee_id', mgr_e.employee_id,
+          'first_name', mgr_p.first_name,
+          'last_name', mgr_p.last_name,
+          'email', mgr_p.email,
+          'position', mgr_e.position,
+          'department', mgr_e.department
+        ) as reporting_manager,
+        json_build_object(
+          'name', o.name,
+          'domain', o.domain
+        ) as organization
+      FROM employees e
+      JOIN profiles p ON p.id = e.user_id
+      LEFT JOIN employees mgr_e ON mgr_e.id = e.reporting_manager_id
+      LEFT JOIN profiles mgr_p ON mgr_p.id = mgr_e.user_id
+      LEFT JOIN organizations o ON o.id = e.tenant_id
+      WHERE e.id = $1 AND e.tenant_id = $2`,
+      [id, userTenantId]
+    );
+    
+    if (employeeResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Employee not found' });
+    }
+    
+    const employee = employeeResult.rows[0];
+    
+    // Get reporting team (direct reports)
+    const teamResult = await query(
       `SELECT 
         e.*,
         json_build_object(
@@ -179,15 +217,50 @@ router.get('/:id', authenticateToken, async (req, res) => {
         ) as profiles
       FROM employees e
       JOIN profiles p ON p.id = e.user_id
-      WHERE e.id = $1 AND e.tenant_id = $2`,
+      WHERE e.reporting_manager_id = $1 AND e.tenant_id = $2 AND e.status = 'active'
+      ORDER BY e.employee_id`,
       [id, userTenantId]
     );
     
-    if (employeeResult.rows.length === 0) {
-      return res.status(404).json({ error: 'Employee not found' });
+    employee.reporting_team = teamResult.rows;
+    
+    // Get onboarding data
+    const onboardingResult = await query(
+      `SELECT * FROM onboarding_data WHERE employee_id = $1`,
+      [id]
+    );
+    
+    if (onboardingResult.rows.length > 0) {
+      employee.onboarding_data = onboardingResult.rows[0];
     }
     
-    res.json(employeeResult.rows[0]);
+    // Get performance reviews
+    const reviewsResult = await query(
+      `SELECT 
+        pr.*,
+        json_build_object(
+          'cycle_name', ac.cycle_name,
+          'cycle_year', ac.cycle_year,
+          'start_date', ac.start_date,
+          'end_date', ac.end_date
+        ) as appraisal_cycle,
+        json_build_object(
+          'first_name', reviewer_p.first_name,
+          'last_name', reviewer_p.last_name,
+          'position', reviewer_e.position
+        ) as reviewer
+      FROM performance_reviews pr
+      LEFT JOIN appraisal_cycles ac ON ac.id = pr.appraisal_cycle_id
+      LEFT JOIN employees reviewer_e ON reviewer_e.id = pr.reviewer_id
+      LEFT JOIN profiles reviewer_p ON reviewer_p.id = reviewer_e.user_id
+      WHERE pr.employee_id = $1 AND pr.tenant_id = $2
+      ORDER BY pr.created_at DESC`,
+      [id, userTenantId]
+    );
+    
+    employee.performance_reviews = reviewsResult.rows;
+    
+    res.json(employee);
   } catch (error) {
     console.error('Error fetching employee:', error);
     res.status(500).json({ error: error.message });

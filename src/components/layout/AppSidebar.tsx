@@ -34,6 +34,7 @@ import { api } from "@/lib/api";
 // Navigation items for different roles
 const hrItems = [
   { title: "Dashboard", url: "/dashboard", icon: LayoutDashboard, showBadge: false },
+  { title: "My Profile", url: "/my/profile", icon: Users, showBadge: false },
   { title: "Employees", url: "/employees", icon: Users, showBadge: false },
   { title: "Onboarding", url: "/onboarding-tracker", icon: UserCheck, showBadge: false },
   { title: "Org Chart", url: "/org-chart", icon: Network, showBadge: false },
@@ -55,6 +56,7 @@ const hrItems = [
 
 const managerItems = [
   { title: "Dashboard", url: "/dashboard", icon: LayoutDashboard, showBadge: false },
+  { title: "My Profile", url: "/my/profile", icon: Users, showBadge: false },
   { title: "My Team", url: "/employees", icon: Users, showBadge: false },
   { title: "Org Chart", url: "/org-chart", icon: Network, showBadge: false },
   { title: "Timesheets", url: "/timesheets", icon: Clock, showBadge: false },
