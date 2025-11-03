@@ -105,6 +105,29 @@ class ApiClient {
     });
   }
 
+  async updateEmployee(id: string, data: {
+    firstName?: string;
+    lastName?: string;
+    email?: string;
+    phone?: string;
+    employeeId?: string;
+    department?: string;
+    position?: string;
+    workLocation?: string;
+    joinDate?: string;
+    reportingManagerId?: string | null;
+    status?: string;
+  }) {
+    return this.request(`/api/employees/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async getEmployee(id: string) {
+    return this.request(`/api/employees/${id}`);
+  }
+
   // Profile methods
   async getProfile() {
     return this.request('/api/profiles/me');

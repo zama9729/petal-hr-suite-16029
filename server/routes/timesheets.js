@@ -198,6 +198,8 @@ router.get('/pending', authenticateToken, async (req, res) => {
 
     // Build query based on role
     let timesheetsQuery;
+    let queryParams = [];
+    
     if (role === 'manager') {
       // Managers can only see their team's timesheets
       timesheetsQuery = `
@@ -218,8 +220,9 @@ router.get('/pending', authenticateToken, async (req, res) => {
           AND e.reporting_manager_id = $2
         ORDER BY t.submitted_at DESC
       `;
-    } else {
-      // HR/CEO can see all pending timesheets
+      queryParams = [tenantId, managerId];
+    } else if (['hr', 'director', 'ceo'].includes(role)) {
+      // HR/CEO can see timesheets where employee has no manager OR manager has no manager
       timesheetsQuery = `
         SELECT 
           t.*,
@@ -233,10 +236,15 @@ router.get('/pending', authenticateToken, async (req, res) => {
         FROM timesheets t
         JOIN employees e ON e.id = t.employee_id
         JOIN profiles p ON p.id = e.user_id
+        LEFT JOIN employees m ON e.reporting_manager_id = m.id
         WHERE t.tenant_id = $1
           AND t.status = 'pending'
+          AND (e.reporting_manager_id IS NULL OR m.reporting_manager_id IS NULL)
         ORDER BY t.submitted_at DESC
       `;
+      queryParams = [tenantId];
+    } else {
+      return res.status(403).json({ error: 'Insufficient permissions' });
     }
 
     let result;
@@ -245,10 +253,8 @@ router.get('/pending', authenticateToken, async (req, res) => {
         // Managers must have an employee row
         return res.status(404).json({ error: 'Employee not found' });
       }
-      result = await query(timesheetsQuery, [tenantId, managerId]);
-    } else {
-      result = await query(timesheetsQuery, [tenantId]);
     }
+    result = await query(timesheetsQuery, queryParams);
     
     // Fetch entries separately for each timesheet
     const timesheetsWithEntries = await Promise.all(
@@ -586,8 +592,31 @@ router.post('/:id/approve', authenticateToken, async (req, res) => {
     const timesheet = timesheetResult.rows[0];
 
     // Check permission based on role
-    if (role === 'manager' && timesheet.reporting_manager_id !== reviewerId) {
-      return res.status(403).json({ error: 'You can only approve timesheets from your team' });
+    if (role === 'manager') {
+      // Managers can only approve timesheets from their direct reports
+      if (timesheet.reporting_manager_id !== reviewerId) {
+        return res.status(403).json({ error: 'You can only approve timesheets from your team' });
+      }
+    } else if (['hr', 'director', 'ceo'].includes(role)) {
+      // HR/CEO can approve timesheets where employee has no manager OR manager has no manager
+      // Check if this timesheet falls into that category
+      const employeeCheck = await query(
+        `SELECT e.reporting_manager_id, m.reporting_manager_id as manager_manager_id
+         FROM employees e
+         LEFT JOIN employees m ON e.reporting_manager_id = m.id
+         WHERE e.id = $1`,
+        [timesheet.employee_id]
+      );
+      
+      if (employeeCheck.rows.length > 0) {
+        const emp = employeeCheck.rows[0];
+        const hasNoManagerOrManagerHasNoManager = !emp.reporting_manager_id || !emp.manager_manager_id;
+        
+        if (!hasNoManagerOrManagerHasNoManager) {
+          // Normal hierarchy exists, so only manager can approve
+          return res.status(403).json({ error: 'This timesheet should be approved by the employee\'s manager' });
+        }
+      }
     }
 
     // Update timesheet

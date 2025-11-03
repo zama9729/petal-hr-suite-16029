@@ -87,6 +87,14 @@ CREATE TABLE onboarding_data (
   city TEXT,
   state TEXT,
   postal_code TEXT,
+  permanent_address TEXT,
+  permanent_city TEXT,
+  permanent_state TEXT,
+  permanent_postal_code TEXT,
+  current_address TEXT,
+  current_city TEXT,
+  current_state TEXT,
+  current_postal_code TEXT,
   bank_account_number TEXT,
   bank_name TEXT,
   bank_branch TEXT,
@@ -237,6 +245,77 @@ CREATE TABLE notifications (
   link TEXT,
   created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now()
 );
+
+-- Approvals and Approval Audit tables
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'approval_status') THEN
+    CREATE TYPE approval_status AS ENUM ('pending','approved','rejected');
+  END IF;
+END $$;
+
+-- approvals table
+CREATE TABLE IF NOT EXISTS approvals (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  tenant_id UUID REFERENCES organizations(id) ON DELETE CASCADE NOT NULL,
+  resource_type TEXT NOT NULL, -- e.g., 'leave' | 'expense'
+  resource_id UUID NOT NULL,
+  requester_id UUID REFERENCES employees(id) ON DELETE SET NULL,
+  stage_index INTEGER NOT NULL DEFAULT 0, -- 0-based index of current stage
+  total_stages INTEGER NOT NULL DEFAULT 1,
+  approver_id UUID REFERENCES employees(id),
+  approver_type TEXT NOT NULL CHECK (approver_type IN ('manager','hr','ceo','director')),
+  status approval_status NOT NULL DEFAULT 'pending',
+  acted_by UUID REFERENCES employees(id),
+  acted_at TIMESTAMPTZ,
+  comment TEXT,
+  meta JSONB DEFAULT '{}'::jsonb,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  UNIQUE (tenant_id, resource_type, resource_id, approver_type, stage_index)
+);
+
+CREATE INDEX IF NOT EXISTS idx_approvals_tenant ON approvals(tenant_id);
+CREATE INDEX IF NOT EXISTS idx_approvals_resource ON approvals(resource_type, resource_id);
+CREATE INDEX IF NOT EXISTS idx_approvals_status ON approvals(status);
+
+-- approval audit log
+CREATE TABLE IF NOT EXISTS approval_audit (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  tenant_id UUID REFERENCES organizations(id) ON DELETE CASCADE NOT NULL,
+  approval_id UUID REFERENCES approvals(id) ON DELETE CASCADE NOT NULL,
+  action TEXT NOT NULL, -- 'created' | 'routed' | 'approved' | 'rejected'
+  actor_employee_id UUID REFERENCES employees(id),
+  reason TEXT,
+  details JSONB DEFAULT '{}'::jsonb,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_approval_audit_approval ON approval_audit(approval_id);
+CREATE INDEX IF NOT EXISTS idx_approval_audit_tenant ON approval_audit(tenant_id);
+
+-- Optional: admin-configurable thresholds per tenant
+CREATE TABLE IF NOT EXISTS hr_approval_thresholds (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  tenant_id UUID REFERENCES organizations(id) ON DELETE CASCADE NOT NULL,
+  leave_days_hr_threshold INTEGER NOT NULL DEFAULT 10,
+  expense_amount_hr_threshold NUMERIC(12,2) NOT NULL DEFAULT 10000,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  UNIQUE(tenant_id)
+);
+
+-- Trigger function for updated_at (if not already exists)
+CREATE OR REPLACE FUNCTION update_updated_at_column()
+RETURNS TRIGGER AS $$
+BEGIN
+  NEW.updated_at = now();
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER IF NOT EXISTS update_approvals_updated_at
+  BEFORE UPDATE ON approvals
+  FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
 -- Helper functions (replacing Supabase RPC functions)
 CREATE OR REPLACE FUNCTION get_user_role(_user_id UUID)

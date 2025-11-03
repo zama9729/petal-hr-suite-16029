@@ -1,13 +1,14 @@
--- Approvals and Approval Audit tables
--- Thresholds are configurable via environment variables at app level; optional table added for admin-configurable thresholds
+-- Run this SQL script to create the approvals table if it doesn't exist
+-- This fixes the "relation approvals does not exist" error
 
+-- Create approval_status enum type if it doesn't exist
 DO $$ BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'approval_status') THEN
     CREATE TYPE approval_status AS ENUM ('pending','approved','rejected');
   END IF;
 END $$;
 
--- approvals table
+-- Create approvals table
 CREATE TABLE IF NOT EXISTS approvals (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   tenant_id UUID REFERENCES organizations(id) ON DELETE CASCADE NOT NULL,
@@ -28,11 +29,12 @@ CREATE TABLE IF NOT EXISTS approvals (
   UNIQUE (tenant_id, resource_type, resource_id, approver_type, stage_index)
 );
 
+-- Create indexes
 CREATE INDEX IF NOT EXISTS idx_approvals_tenant ON approvals(tenant_id);
 CREATE INDEX IF NOT EXISTS idx_approvals_resource ON approvals(resource_type, resource_id);
 CREATE INDEX IF NOT EXISTS idx_approvals_status ON approvals(status);
 
--- approval audit log
+-- Create approval_audit table
 CREATE TABLE IF NOT EXISTS approval_audit (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   tenant_id UUID REFERENCES organizations(id) ON DELETE CASCADE NOT NULL,
@@ -44,10 +46,11 @@ CREATE TABLE IF NOT EXISTS approval_audit (
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
+-- Create indexes for approval_audit
 CREATE INDEX IF NOT EXISTS idx_approval_audit_approval ON approval_audit(approval_id);
 CREATE INDEX IF NOT EXISTS idx_approval_audit_tenant ON approval_audit(tenant_id);
 
--- Optional: admin-configurable thresholds per tenant
+-- Create hr_approval_thresholds table
 CREATE TABLE IF NOT EXISTS hr_approval_thresholds (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   tenant_id UUID REFERENCES organizations(id) ON DELETE CASCADE NOT NULL,
@@ -58,7 +61,7 @@ CREATE TABLE IF NOT EXISTS hr_approval_thresholds (
   UNIQUE(tenant_id)
 );
 
--- triggers
+-- Create trigger function for updated_at
 CREATE OR REPLACE FUNCTION update_updated_at_column()
 RETURNS TRIGGER AS $$
 BEGIN
@@ -67,8 +70,9 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
+-- Create trigger for approvals table
+DROP TRIGGER IF EXISTS update_approvals_updated_at ON approvals;
 CREATE TRIGGER update_approvals_updated_at
   BEFORE UPDATE ON approvals
   FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
-
 

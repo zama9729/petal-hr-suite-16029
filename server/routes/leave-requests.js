@@ -82,12 +82,14 @@ router.get('/', authenticateToken, async (req, res) => {
     }
 
     // Fetch team requests if manager or above
-    if (['manager', 'hr', 'director', 'ceo'].includes(role) && employeeId) {
-      // Fetch pending requests
-      const pendingRequestsResult = await query(
-        `SELECT 
+    if (['manager', 'hr', 'director', 'ceo'].includes(role)) {
+      // Build query to fetch pending requests
+      let pendingRequestsQuery = `
+        SELECT 
           lr.*,
           e.employee_id,
+          e.reporting_manager_id,
+          m.reporting_manager_id as manager_manager_id,
           json_build_object(
             'id', p1.id,
             'profiles', json_build_object(
@@ -113,19 +115,38 @@ router.get('/', authenticateToken, async (req, res) => {
         LEFT JOIN employees er ON lr.reviewed_by = er.id
         LEFT JOIN profiles p2 ON er.user_id = p2.id
         LEFT JOIN leave_policies lp ON lr.leave_type_id = lp.id
+        LEFT JOIN employees m ON e.reporting_manager_id = m.id
         WHERE lr.tenant_id = $1 AND lr.status = 'pending'
-        ORDER BY lr.submitted_at DESC`,
-        [tenantId]
-      );
+      `;
 
-      // Filter to only show requests from direct reports
-      teamRequests = pendingRequestsResult.rows.filter(
-        (req) => req.employee?.profiles?.first_name || true // For now, show all pending
-      );
+      let queryParams = [tenantId];
 
-      // Fetch approved requests for the team (excluding manager's own requests)
-      const approvedRequestsResult = await query(
-        `SELECT 
+      if (role === 'manager' && employeeId) {
+        // Managers see only direct reports (normal flow)
+        pendingRequestsQuery += ` AND e.reporting_manager_id = $2`;
+        queryParams.push(employeeId);
+      } else if (['hr', 'director', 'ceo'].includes(role)) {
+        // HR/CEO see requests where employee has no manager OR manager has no manager
+        pendingRequestsQuery += ` AND (e.reporting_manager_id IS NULL OR m.reporting_manager_id IS NULL)`;
+      }
+
+      pendingRequestsQuery += ` ORDER BY lr.submitted_at DESC`;
+
+      const pendingRequestsResult = await query(pendingRequestsQuery, queryParams);
+
+      // For managers, filter to only show requests from direct reports
+      // For HR/CEO, show requests that need their approval (no manager or manager has no manager)
+      if (role === 'manager' && employeeId) {
+        teamRequests = pendingRequestsResult.rows.filter(
+          (req) => req.employee?.profiles?.first_name || true // For now, show all pending
+        );
+      } else {
+        teamRequests = pendingRequestsResult.rows;
+      }
+
+      // Fetch approved requests for the team
+      let approvedQuery = `
+        SELECT 
           lr.*,
           e.employee_id,
           json_build_object(
@@ -153,11 +174,20 @@ router.get('/', authenticateToken, async (req, res) => {
         LEFT JOIN employees er ON lr.reviewed_by = er.id
         LEFT JOIN profiles p2 ON er.user_id = p2.id
         LEFT JOIN leave_policies lp ON lr.leave_type_id = lp.id
-        WHERE lr.tenant_id = $1 AND lr.status = 'approved' AND lr.employee_id != $2
-        ORDER BY lr.reviewed_at DESC`,
-        [tenantId, employeeId]
-      );
-
+        WHERE lr.tenant_id = $1 AND lr.status = 'approved'
+      `;
+      
+      let approvedParams = [tenantId];
+      
+      // Exclude manager's own requests if they have an employee ID
+      if (employeeId) {
+        approvedQuery += ` AND lr.employee_id != $2`;
+        approvedParams.push(employeeId);
+      }
+      
+      approvedQuery += ` ORDER BY lr.reviewed_at DESC`;
+      
+      const approvedRequestsResult = await query(approvedQuery, approvedParams);
       approvedRequests = approvedRequestsResult.rows;
     }
 
@@ -233,21 +263,181 @@ router.post('/', authenticateToken, async (req, res) => {
 router.patch('/:id/approve', authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
+    
+    // Check if approvals table exists, if not, allow direct approval for CEO/HR
+    let approvalsTableExists = true;
+    try {
+      await query('SELECT 1 FROM approvals LIMIT 1');
+    } catch (tableError) {
+      if (tableError.message && tableError.message.includes('does not exist')) {
+        approvalsTableExists = false;
+      } else {
+        throw tableError;
+      }
+    }
 
-    // Get employee ID (reviewer)
-    const empResult = await query(
+    // Get employee ID (reviewer) - check if user has employee record
+    let empResult = await query(
       'SELECT id FROM employees WHERE user_id = $1',
       [req.user.id]
     );
 
+    let reviewerId;
+
     if (empResult.rows.length === 0) {
-      return res.status(404).json({ error: 'Employee not found' });
+      // CEO/HR might not have employee records - find by role
+      const roleResult = await query(
+        `SELECT ur.role, p.tenant_id
+         FROM user_roles ur
+         JOIN profiles p ON p.id = ur.user_id
+         WHERE ur.user_id = $1 AND ur.role IN ('ceo', 'hr', 'director')`,
+        [req.user.id]
+      );
+
+      if (roleResult.rows.length > 0) {
+        // Try to find employee record by role
+        const role = roleResult.rows[0].role;
+        const tenantId = roleResult.rows[0].tenant_id;
+        
+        const empByRoleResult = await query(
+          `SELECT e.id
+           FROM employees e
+           JOIN user_roles ur ON ur.user_id = e.user_id
+           WHERE ur.user_id = $1 AND ur.role = $2 AND e.tenant_id = $3`,
+          [req.user.id, role, tenantId]
+        );
+
+        if (empByRoleResult.rows.length > 0) {
+          reviewerId = empByRoleResult.rows[0].id;
+        } else {
+          // Create minimal employee record for CEO/HR if needed
+          const profileResult = await query(
+            'SELECT tenant_id FROM profiles WHERE id = $1',
+            [req.user.id]
+          );
+          
+          if (profileResult.rows.length === 0) {
+            return res.status(404).json({ error: 'User profile not found' });
+          }
+
+          const tenantIdForEmp = profileResult.rows[0].tenant_id;
+          const empCodeRes = await query('SELECT gen_random_uuid() AS id');
+          const newEmpId = `EMP-${empCodeRes.rows[0].id.slice(0,8).toUpperCase()}`;
+          
+          const insertResult = await query(
+            `INSERT INTO employees (user_id, employee_id, tenant_id, onboarding_status, must_change_password)
+             VALUES ($1, $2, $3, 'completed', false)
+             RETURNING id`,
+            [req.user.id, newEmpId, tenantIdForEmp]
+          );
+          
+          reviewerId = insertResult.rows[0].id;
+        }
+      } else {
+        return res.status(404).json({ error: 'Employee not found and user does not have CEO/HR role' });
+      }
+    } else {
+      reviewerId = empResult.rows[0].id;
     }
 
-    const reviewerId = empResult.rows[0].id;
+    let result;
+    
+    // Check if approval workflow exists, if not create it or approve directly
+    let existingApprovals = { rows: [] };
+    
+    if (approvalsTableExists) {
+      try {
+        existingApprovals = await query(
+          `SELECT * FROM approvals WHERE resource_type = 'leave' AND resource_id = $1`,
+          [id]
+        );
+      } catch (queryError) {
+        console.error('Error querying approvals:', queryError);
+        approvalsTableExists = false;
+      }
+    }
+    
+    if (existingApprovals.rows.length === 0 || !approvalsTableExists) {
+      // No approval workflow exists - check if we should approve directly
+      // Get leave request to check employee's manager situation
+      const leaveRequest = await query(
+        `SELECT lr.*, e.reporting_manager_id, m.reporting_manager_id as manager_manager_id
+         FROM leave_requests lr
+         LEFT JOIN employees e ON lr.employee_id = e.id
+         LEFT JOIN employees m ON e.reporting_manager_id = m.id
+         WHERE lr.id = $1`,
+        [id]
+      );
 
-    // Apply staged approval
-    const result = await apply_approval('leave', id, reviewerId, 'approve', null);
+      if (leaveRequest.rows.length === 0) {
+        return res.status(404).json({ error: 'Leave request not found' });
+      }
+
+      const leave = leaveRequest.rows[0];
+      
+      // Check if CEO/HR can approve this (no manager or manager has no manager)
+      const canDirectlyApprove = !leave.reporting_manager_id || !leave.manager_manager_id;
+      
+      // Get reviewer role
+      const reviewerRoleResult = await query(
+        `SELECT ur.role FROM user_roles ur WHERE ur.user_id = $1 AND ur.role IN ('ceo', 'hr', 'director')`,
+        [req.user.id]
+      );
+      
+      const reviewerRole = reviewerRoleResult.rows[0]?.role;
+      
+      if (canDirectlyApprove && ['ceo', 'hr', 'director'].includes(reviewerRole)) {
+        // Directly approve without workflow
+        await query(
+          `UPDATE leave_requests SET status = 'approved', reviewed_by = $1, reviewed_at = now() WHERE id = $2`,
+          [reviewerId, id]
+        );
+        
+        result = { updated: true, final: true, status: 'approved' };
+      } else {
+        // Create approval workflow now
+        try {
+          const leaveReq = await query('SELECT employee_id, total_days FROM leave_requests WHERE id = $1', [id]);
+          if (leaveReq.rows.length === 0) {
+            return res.status(404).json({ error: 'Leave request not found' });
+          }
+          
+          const employeeRes = await query('SELECT user_id FROM employees WHERE id = $1', [leaveReq.rows[0].employee_id]);
+          if (employeeRes.rows.length === 0) {
+            return res.status(404).json({ error: 'Employee not found for leave request' });
+          }
+          
+          await create_approval('leave', leaveReq.rows[0].total_days, employeeRes.rows[0].user_id, id);
+          
+          // Now apply approval
+          result = await apply_approval('leave', id, reviewerId, 'approve', null);
+        } catch (createError) {
+          console.error('Error creating approval workflow:', createError);
+          // If creation fails, still try direct approval if allowed
+          if (canDirectlyApprove && ['ceo', 'hr', 'director'].includes(reviewerRole)) {
+            await query(
+              `UPDATE leave_requests SET status = 'approved', reviewed_by = $1, reviewed_at = now() WHERE id = $2`,
+              [reviewerId, id]
+            );
+            result = { updated: true, final: true, status: 'approved' };
+          } else {
+            throw createError;
+          }
+        }
+      }
+    } else {
+      // Approval workflow exists, use it
+      if (approvalsTableExists) {
+        result = await apply_approval('leave', id, reviewerId, 'approve', null);
+      } else {
+        // Fallback to direct approval
+        await query(
+          `UPDATE leave_requests SET status = 'approved', reviewed_by = $1, reviewed_at = now() WHERE id = $2`,
+          [reviewerId, id]
+        );
+        result = { updated: true, final: true, status: 'approved' };
+      }
+    }
 
     if (result.final && result.status === 'approved') {
       await query(
@@ -257,7 +447,15 @@ router.patch('/:id/approve', authenticateToken, async (req, res) => {
     }
 
     // If still pending next stage, return next approver info
-    const next = await next_approver('leave', id);
+    let next = { pending: false };
+    if (approvalsTableExists) {
+      try {
+        next = await next_approver('leave', id);
+      } catch (error) {
+        console.error('Error getting next approver:', error);
+      }
+    }
+    
     res.json({ ok: true, workflow: result, next });
   } catch (error) {
     console.error('Error approving leave request:', error);
@@ -271,17 +469,69 @@ router.patch('/:id/reject', authenticateToken, async (req, res) => {
     const { id } = req.params;
     const { rejection_reason } = req.body;
 
-    // Get employee ID (reviewer)
-    const empResult = await query(
+    // Get employee ID (reviewer) - check if user has employee record
+    let empResult = await query(
       'SELECT id FROM employees WHERE user_id = $1',
       [req.user.id]
     );
 
-    if (empResult.rows.length === 0) {
-      return res.status(404).json({ error: 'Employee not found' });
-    }
+    let reviewerId;
 
-    const reviewerId = empResult.rows[0].id;
+    if (empResult.rows.length === 0) {
+      // CEO/HR might not have employee records - find by role
+      const roleResult = await query(
+        `SELECT ur.role, p.tenant_id
+         FROM user_roles ur
+         JOIN profiles p ON p.id = ur.user_id
+         WHERE ur.user_id = $1 AND ur.role IN ('ceo', 'hr', 'director')`,
+        [req.user.id]
+      );
+
+      if (roleResult.rows.length > 0) {
+        // Try to find employee record by role
+        const role = roleResult.rows[0].role;
+        const tenantId = roleResult.rows[0].tenant_id;
+        
+        const empByRoleResult = await query(
+          `SELECT e.id
+           FROM employees e
+           JOIN user_roles ur ON ur.user_id = e.user_id
+           WHERE ur.user_id = $1 AND ur.role = $2 AND e.tenant_id = $3`,
+          [req.user.id, role, tenantId]
+        );
+
+        if (empByRoleResult.rows.length > 0) {
+          reviewerId = empByRoleResult.rows[0].id;
+        } else {
+          // Create minimal employee record for CEO/HR if needed
+          const profileResult = await query(
+            'SELECT tenant_id FROM profiles WHERE id = $1',
+            [req.user.id]
+          );
+          
+          if (profileResult.rows.length === 0) {
+            return res.status(404).json({ error: 'User profile not found' });
+          }
+
+          const tenantIdForEmp = profileResult.rows[0].tenant_id;
+          const empCodeRes = await query('SELECT gen_random_uuid() AS id');
+          const newEmpId = `EMP-${empCodeRes.rows[0].id.slice(0,8).toUpperCase()}`;
+          
+          const insertResult = await query(
+            `INSERT INTO employees (user_id, employee_id, tenant_id, onboarding_status, must_change_password)
+             VALUES ($1, $2, $3, 'completed', false)
+             RETURNING id`,
+            [req.user.id, newEmpId, tenantIdForEmp]
+          );
+          
+          reviewerId = insertResult.rows[0].id;
+        }
+      } else {
+        return res.status(404).json({ error: 'Employee not found and user does not have CEO/HR role' });
+      }
+    } else {
+      reviewerId = empResult.rows[0].id;
+    }
 
     const result = await apply_approval('leave', id, reviewerId, 'reject', rejection_reason || null);
     await query(

@@ -14,10 +14,21 @@ const onboardingSchema = z.object({
   emergencyContactName: z.string().trim().min(1, "Required").max(100),
   emergencyContactPhone: z.string().trim().min(10, "Invalid phone").max(15),
   emergencyContactRelation: z.string().trim().min(1, "Required"),
-  address: z.string().trim().min(1, "Required").max(500),
-  city: z.string().trim().min(1, "Required"),
-  state: z.string().trim().min(1, "Required"),
-  postalCode: z.string().trim().min(1, "Required"),
+  // Permanent address
+  permanentAddress: z.string().trim().min(1, "Required").max(500),
+  permanentCity: z.string().trim().min(1, "Required"),
+  permanentState: z.string().trim().min(1, "Required"),
+  permanentPostalCode: z.string().trim().min(1, "Required"),
+  // Current address
+  currentAddress: z.string().trim().min(1, "Required").max(500),
+  currentCity: z.string().trim().min(1, "Required"),
+  currentState: z.string().trim().min(1, "Required"),
+  currentPostalCode: z.string().trim().min(1, "Required"),
+  // Keep old fields for backward compatibility
+  address: z.string().trim().optional(),
+  city: z.string().trim().optional(),
+  state: z.string().trim().optional(),
+  postalCode: z.string().trim().optional(),
   bankAccountNumber: z.string().trim().min(1, "Required"),
   bankName: z.string().trim().min(1, "Required"),
   bankBranch: z.string().trim().min(1, "Required"),
@@ -38,6 +49,14 @@ export default function Onboarding() {
     emergencyContactName: "",
     emergencyContactPhone: "",
     emergencyContactRelation: "",
+    permanentAddress: "",
+    permanentCity: "",
+    permanentState: "",
+    permanentPostalCode: "",
+    currentAddress: "",
+    currentCity: "",
+    currentState: "",
+    currentPostalCode: "",
     address: "",
     city: "",
     state: "",
@@ -99,10 +118,19 @@ export default function Onboarding() {
         emergencyContactName: validated.emergencyContactName,
         emergencyContactPhone: validated.emergencyContactPhone,
         emergencyContactRelation: validated.emergencyContactRelation,
-        address: validated.address,
-        city: validated.city,
-        state: validated.state,
-        postalCode: validated.postalCode,
+        permanentAddress: validated.permanentAddress,
+        permanentCity: validated.permanentCity,
+        permanentState: validated.permanentState,
+        permanentPostalCode: validated.permanentPostalCode,
+        currentAddress: validated.currentAddress,
+        currentCity: validated.currentCity,
+        currentState: validated.currentState,
+        currentPostalCode: validated.currentPostalCode,
+        // Keep old fields for backward compatibility
+        address: validated.address || validated.currentAddress,
+        city: validated.city || validated.currentCity,
+        state: validated.state || validated.currentState,
+        postalCode: validated.postalCode || validated.currentPostalCode,
         bankAccountNumber: validated.bankAccountNumber,
         bankName: validated.bankName,
         bankBranch: validated.bankBranch,
@@ -172,42 +200,89 @@ export default function Onboarding() {
                     />
                   </div>
                 </div>
-                <div className="space-y-2">
-                  <Label htmlFor="address">Address *</Label>
-                  <Input
-                    id="address"
-                    value={formData.address}
-                    onChange={(e) => setFormData({ ...formData, address: e.target.value })}
-                    required
-                  />
-                </div>
-                <div className="grid grid-cols-3 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="city">City *</Label>
-                    <Input
-                      id="city"
-                      value={formData.city}
-                      onChange={(e) => setFormData({ ...formData, city: e.target.value })}
-                      required
-                    />
+                <div className="space-y-4">
+                  <div>
+                    <h4 className="text-md font-medium mb-3">Permanent Address *</h4>
+                    <div className="space-y-2">
+                      <Label htmlFor="permanentAddress">Address *</Label>
+                      <Input
+                        id="permanentAddress"
+                        value={formData.permanentAddress}
+                        onChange={(e) => setFormData({ ...formData, permanentAddress: e.target.value })}
+                        required
+                      />
+                    </div>
+                    <div className="grid grid-cols-3 gap-4 mt-2">
+                      <div className="space-y-2">
+                        <Label htmlFor="permanentCity">City *</Label>
+                        <Input
+                          id="permanentCity"
+                          value={formData.permanentCity}
+                          onChange={(e) => setFormData({ ...formData, permanentCity: e.target.value })}
+                          required
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="permanentState">State *</Label>
+                        <Input
+                          id="permanentState"
+                          value={formData.permanentState}
+                          onChange={(e) => setFormData({ ...formData, permanentState: e.target.value })}
+                          required
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="permanentPostalCode">Postal Code *</Label>
+                        <Input
+                          id="permanentPostalCode"
+                          value={formData.permanentPostalCode}
+                          onChange={(e) => setFormData({ ...formData, permanentPostalCode: e.target.value })}
+                          required
+                        />
+                      </div>
+                    </div>
                   </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="state">State *</Label>
-                    <Input
-                      id="state"
-                      value={formData.state}
-                      onChange={(e) => setFormData({ ...formData, state: e.target.value })}
-                      required
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="postalCode">Postal Code *</Label>
-                    <Input
-                      id="postalCode"
-                      value={formData.postalCode}
-                      onChange={(e) => setFormData({ ...formData, postalCode: e.target.value })}
-                      required
-                    />
+                  
+                  <div>
+                    <h4 className="text-md font-medium mb-3">Current Address *</h4>
+                    <div className="space-y-2">
+                      <Label htmlFor="currentAddress">Address *</Label>
+                      <Input
+                        id="currentAddress"
+                        value={formData.currentAddress}
+                        onChange={(e) => setFormData({ ...formData, currentAddress: e.target.value })}
+                        required
+                      />
+                    </div>
+                    <div className="grid grid-cols-3 gap-4 mt-2">
+                      <div className="space-y-2">
+                        <Label htmlFor="currentCity">City *</Label>
+                        <Input
+                          id="currentCity"
+                          value={formData.currentCity}
+                          onChange={(e) => setFormData({ ...formData, currentCity: e.target.value })}
+                          required
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="currentState">State *</Label>
+                        <Input
+                          id="currentState"
+                          value={formData.currentState}
+                          onChange={(e) => setFormData({ ...formData, currentState: e.target.value })}
+                          required
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="currentPostalCode">Postal Code *</Label>
+                        <Input
+                          id="currentPostalCode"
+                          value={formData.currentPostalCode}
+                          onChange={(e) => setFormData({ ...formData, currentPostalCode: e.target.value })}
+                          required
+                        />
+                      </div>
+                    </div>
                   </div>
                 </div>
               </div>

@@ -220,8 +220,14 @@ export default function Employees() {
                                   Assign Shift
                                 </DropdownMenuItem>
                               )}
-                              <DropdownMenuItem>Edit</DropdownMenuItem>
-                              <DropdownMenuItem className="text-destructive">Deactivate</DropdownMenuItem>
+                              {isHROrAbove && (
+                                <DropdownMenuItem asChild>
+                                  <Link to={`/employees/${employee.id}`}>Edit</Link>
+                                </DropdownMenuItem>
+                              )}
+                              {isHROrAbove && (
+                                <DropdownMenuItem className="text-destructive">Deactivate</DropdownMenuItem>
+                              )}
                             </DropdownMenuContent>
                           </DropdownMenu>
                         </TableCell>

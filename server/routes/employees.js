@@ -42,10 +42,12 @@ router.get('/', authenticateToken, async (req, res) => {
             json_build_object(
               'first_name', p.first_name,
               'last_name', p.last_name,
-              'email', p.email
+              'email', p.email,
+              'role', ur.role
             ) as profiles
           FROM employees e
           JOIN profiles p ON p.id = e.user_id
+          LEFT JOIN user_roles ur ON ur.user_id = e.user_id
           WHERE e.tenant_id = $1 
             AND e.reporting_manager_id = $2
           ORDER BY e.created_at DESC
@@ -58,10 +60,12 @@ router.get('/', authenticateToken, async (req, res) => {
             json_build_object(
               'first_name', p.first_name,
               'last_name', p.last_name,
-              'email', p.email
+              'email', p.email,
+              'role', ur.role
             ) as profiles
           FROM employees e
           JOIN profiles p ON p.id = e.user_id
+          LEFT JOIN user_roles ur ON ur.user_id = e.user_id
           WHERE e.tenant_id = $1
           ORDER BY e.created_at DESC
         `;
@@ -73,10 +77,12 @@ router.get('/', authenticateToken, async (req, res) => {
           json_build_object(
             'first_name', p.first_name,
             'last_name', p.last_name,
-            'email', p.email
+            'email', p.email,
+            'role', ur.role
           ) as profiles
         FROM employees e
         JOIN profiles p ON p.id = e.user_id
+        LEFT JOIN user_roles ur ON ur.user_id = e.user_id
         WHERE e.tenant_id = $1
         ORDER BY e.created_at DESC
       `;
@@ -288,6 +294,175 @@ router.post('/', authenticateToken, async (req, res) => {
   } catch (error) {
     console.error('Error creating employee:', error);
     res.status(500).json({ error: error.message || 'Failed to create employee' });
+  }
+});
+
+// Update employee (HR/CEO only)
+router.patch('/:id', authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    // Check role - only HR/CEO/Director can update
+    const roleResult = await query(
+      'SELECT role FROM user_roles WHERE user_id = $1',
+      [req.user.id]
+    );
+    const userRole = roleResult.rows[0]?.role;
+    
+    if (!userRole || !['hr', 'director', 'ceo'].includes(userRole)) {
+      return res.status(403).json({ error: 'Insufficient permissions' });
+    }
+
+    // Get user's tenant_id
+    const tenantResult = await query(
+      'SELECT tenant_id FROM profiles WHERE id = $1',
+      [req.user.id]
+    );
+    const tenantId = tenantResult.rows[0]?.tenant_id;
+
+    if (!tenantId) {
+      return res.status(403).json({ error: 'No organization found' });
+    }
+
+    // Verify employee belongs to same tenant
+    const empCheck = await query(
+      'SELECT tenant_id, user_id FROM employees WHERE id = $1',
+      [id]
+    );
+
+    if (empCheck.rows.length === 0) {
+      return res.status(404).json({ error: 'Employee not found' });
+    }
+
+    if (empCheck.rows[0].tenant_id !== tenantId) {
+      return res.status(403).json({ error: 'Unauthorized' });
+    }
+
+    const {
+      firstName,
+      lastName,
+      email,
+      phone,
+      employeeId,
+      department,
+      position,
+      workLocation,
+      joinDate,
+      reportingManagerId,
+      status
+    } = req.body;
+
+    await query('BEGIN');
+
+    try {
+      const userId = empCheck.rows[0].user_id;
+
+      // Update profile if provided
+      if (firstName || lastName || email || phone !== undefined) {
+        const profileUpdates = [];
+        const profileParams = [];
+        let paramIndex = 1;
+
+        if (firstName !== undefined) {
+          profileUpdates.push(`first_name = $${paramIndex++}`);
+          profileParams.push(firstName);
+        }
+        if (lastName !== undefined) {
+          profileUpdates.push(`last_name = $${paramIndex++}`);
+          profileParams.push(lastName);
+        }
+        if (email !== undefined) {
+          profileUpdates.push(`email = $${paramIndex++}`);
+          profileParams.push(email);
+        }
+        if (phone !== undefined) {
+          profileUpdates.push(`phone = $${paramIndex++}`);
+          profileParams.push(phone);
+        }
+
+        if (profileUpdates.length > 0) {
+          profileUpdates.push(`updated_at = now()`);
+          profileParams.push(userId);
+          
+          await query(
+            `UPDATE profiles SET ${profileUpdates.join(', ')} WHERE id = $${paramIndex}`,
+            profileParams
+          );
+        }
+      }
+
+      // Update employee if provided
+      if (employeeId || department || position || workLocation || joinDate !== undefined || reportingManagerId !== undefined || status !== undefined) {
+        const employeeUpdates = [];
+        const employeeParams = [];
+        let paramIndex = 1;
+
+        if (employeeId !== undefined) {
+          employeeUpdates.push(`employee_id = $${paramIndex++}`);
+          employeeParams.push(employeeId);
+        }
+        if (department !== undefined) {
+          employeeUpdates.push(`department = $${paramIndex++}`);
+          employeeParams.push(department);
+        }
+        if (position !== undefined) {
+          employeeUpdates.push(`position = $${paramIndex++}`);
+          employeeParams.push(position);
+        }
+        if (workLocation !== undefined) {
+          employeeUpdates.push(`work_location = $${paramIndex++}`);
+          employeeParams.push(workLocation);
+        }
+        if (joinDate !== undefined) {
+          employeeUpdates.push(`join_date = $${paramIndex++}`);
+          employeeParams.push(joinDate);
+        }
+        if (reportingManagerId !== undefined) {
+          employeeUpdates.push(`reporting_manager_id = $${paramIndex++}`);
+          employeeParams.push(reportingManagerId || null);
+        }
+        if (status !== undefined) {
+          employeeUpdates.push(`status = $${paramIndex++}`);
+          employeeParams.push(status);
+        }
+
+        if (employeeUpdates.length > 0) {
+          employeeUpdates.push(`updated_at = now()`);
+          employeeParams.push(id);
+          
+          await query(
+            `UPDATE employees SET ${employeeUpdates.join(', ')} WHERE id = $${paramIndex}`,
+            employeeParams
+          );
+        }
+      }
+
+      await query('COMMIT');
+
+      // Fetch updated employee
+      const updatedResult = await query(
+        `SELECT 
+          e.*,
+          json_build_object(
+            'first_name', p.first_name,
+            'last_name', p.last_name,
+            'email', p.email,
+            'phone', p.phone
+          ) as profiles
+        FROM employees e
+        JOIN profiles p ON p.id = e.user_id
+        WHERE e.id = $1 AND e.tenant_id = $2`,
+        [id, tenantId]
+      );
+
+      res.json(updatedResult.rows[0]);
+    } catch (error) {
+      await query('ROLLBACK');
+      throw error;
+    }
+  } catch (error) {
+    console.error('Error updating employee:', error);
+    res.status(500).json({ error: error.message || 'Failed to update employee' });
   }
 });
 
