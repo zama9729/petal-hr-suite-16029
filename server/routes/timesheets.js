@@ -181,7 +181,7 @@ router.get('/pending', authenticateToken, async (req, res) => {
       tenantId = profileRes.rows[0]?.tenant_id || null;
       role = roleRes.rows[0]?.role || null;
       // Only allow HR/CEO (not manager) without employee row
-      if (!tenantId || !role || !['hr', 'director', 'ceo'].includes(role)) {
+      if (!tenantId || !role || !['hr', 'director', 'ceo', 'admin'].includes(role)) {
         return res.status(404).json({ error: 'Employee not found' });
       }
       // No managerId; skip manager filter below
@@ -191,8 +191,8 @@ router.get('/pending', authenticateToken, async (req, res) => {
       role = empResult.rows[0].role;
     }
 
-    // Check if user is manager or HR/CEO
-    if (!['manager', 'hr', 'director', 'ceo'].includes(role)) {
+    // Check if user is manager or HR/CEO/Admin
+    if (!['manager', 'hr', 'director', 'ceo', 'admin'].includes(role)) {
       return res.status(403).json({ error: 'Insufficient permissions' });
     }
 
@@ -221,7 +221,7 @@ router.get('/pending', authenticateToken, async (req, res) => {
         ORDER BY t.submitted_at DESC
       `;
       queryParams = [tenantId, managerId];
-    } else if (['hr', 'director', 'ceo'].includes(role)) {
+    } else if (['hr', 'director', 'ceo', 'admin'].includes(role)) {
       // HR/CEO can see timesheets where employee has no manager OR manager has no manager
       timesheetsQuery = `
         SELECT 
@@ -613,7 +613,7 @@ router.post('/:id/approve', authenticateToken, async (req, res) => {
     const { id: reviewerId, role } = empResult.rows[0];
 
     // Check if user has permission
-    if (!['manager', 'hr', 'director', 'ceo'].includes(role)) {
+    if (!['manager', 'hr', 'director', 'ceo', 'admin'].includes(role)) {
       return res.status(403).json({ error: 'Insufficient permissions' });
     }
 
@@ -638,7 +638,7 @@ router.post('/:id/approve', authenticateToken, async (req, res) => {
       if (timesheet.reporting_manager_id !== reviewerId) {
         return res.status(403).json({ error: 'You can only approve timesheets from your team' });
       }
-    } else if (['hr', 'director', 'ceo'].includes(role)) {
+    } else if (['hr', 'director', 'ceo', 'admin'].includes(role)) {
       // HR/CEO can approve timesheets where employee has no manager OR manager has no manager
       // Check if this timesheet falls into that category
       const employeeCheck = await query(

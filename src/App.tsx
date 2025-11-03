@@ -69,37 +69,37 @@ const App = () => (
             <Route path="/profile/skills" element={<ProtectedRoute><ProfileSkills /></ProtectedRoute>} />
             
             {/* HR-only routes */}
-            <Route path="/employees/new" element={<ProtectedRoute allowedRoles={['hr', 'director', 'ceo']}><AddEmployee /></ProtectedRoute>} />
-            <Route path="/employees/import" element={<ProtectedRoute allowedRoles={['hr', 'director', 'ceo']}><EmployeeImport /></ProtectedRoute>} />
-            <Route path="/onboarding-tracker" element={<ProtectedRoute allowedRoles={['hr', 'director', 'ceo']}><OnboardingTracker /></ProtectedRoute>} />
-            <Route path="/workflows" element={<ProtectedRoute allowedRoles={['hr', 'director', 'ceo']}><Workflows /></ProtectedRoute>} />
-            <Route path="/workflows/new" element={<ProtectedRoute allowedRoles={['hr', 'director', 'ceo']}><WorkflowEditor /></ProtectedRoute>} />
-            <Route path="/workflows/:id/edit" element={<ProtectedRoute allowedRoles={['hr', 'director', 'ceo']}><WorkflowEditor /></ProtectedRoute>} />
-            <Route path="/policies" element={<ProtectedRoute allowedRoles={['hr', 'director', 'ceo']}><LeavePolicies /></ProtectedRoute>} />
-            <Route path="/holidays" element={<ProtectedRoute allowedRoles={['hr', 'director', 'ceo']}><HolidayManagement /></ProtectedRoute>} />
-            <Route path="/analytics" element={<ProtectedRoute allowedRoles={['hr', 'director', 'ceo']}><Analytics /></ProtectedRoute>} />
-            <Route path="/employee-stats" element={<ProtectedRoute allowedRoles={['hr', 'director', 'ceo']}><EmployeeStats /></ProtectedRoute>} />
-            <Route path="/ceo/dashboard" element={<ProtectedRoute allowedRoles={['hr','director','ceo']}><CEODashboard /></ProtectedRoute>} />
-            <Route path="/projects/new" element={<ProtectedRoute allowedRoles={['hr','director','ceo']}><ProjectNew /></ProtectedRoute>} />
-            <Route path="/projects/:id/suggestions" element={<ProtectedRoute allowedRoles={['hr','director','ceo']}><ProjectSuggestions /></ProtectedRoute>} />
+            <Route path="/employees/new" element={<ProtectedRoute allowedRoles={['hr', 'director', 'ceo', 'admin']}><AddEmployee /></ProtectedRoute>} />
+            <Route path="/employees/import" element={<ProtectedRoute allowedRoles={['hr', 'director', 'ceo', 'admin']}><EmployeeImport /></ProtectedRoute>} />
+            <Route path="/onboarding-tracker" element={<ProtectedRoute allowedRoles={['hr', 'director', 'ceo', 'admin']}><OnboardingTracker /></ProtectedRoute>} />
+            <Route path="/workflows" element={<ProtectedRoute allowedRoles={['hr', 'director', 'ceo', 'admin']}><Workflows /></ProtectedRoute>} />
+            <Route path="/workflows/new" element={<ProtectedRoute allowedRoles={['hr', 'director', 'ceo', 'admin']}><WorkflowEditor /></ProtectedRoute>} />
+            <Route path="/workflows/:id/edit" element={<ProtectedRoute allowedRoles={['hr', 'director', 'ceo', 'admin']}><WorkflowEditor /></ProtectedRoute>} />
+            <Route path="/policies" element={<ProtectedRoute allowedRoles={['hr', 'director', 'ceo', 'admin']}><LeavePolicies /></ProtectedRoute>} />
+            <Route path="/holidays" element={<ProtectedRoute allowedRoles={['hr', 'director', 'ceo', 'admin']}><HolidayManagement /></ProtectedRoute>} />
+            <Route path="/analytics" element={<ProtectedRoute allowedRoles={['hr', 'director', 'ceo', 'admin']}><Analytics /></ProtectedRoute>} />
+            <Route path="/employee-stats" element={<ProtectedRoute allowedRoles={['hr', 'director', 'ceo', 'admin']}><EmployeeStats /></ProtectedRoute>} />
+            <Route path="/ceo/dashboard" element={<ProtectedRoute allowedRoles={['hr','director','ceo','admin']}><CEODashboard /></ProtectedRoute>} />
+            <Route path="/projects/new" element={<ProtectedRoute allowedRoles={['hr','director','ceo','admin']}><ProjectNew /></ProtectedRoute>} />
+            <Route path="/projects/:id/suggestions" element={<ProtectedRoute allowedRoles={['hr','director','ceo','admin']}><ProjectSuggestions /></ProtectedRoute>} />
             <Route path="/calendar" element={<ProtectedRoute><ProjectCalendar /></ProtectedRoute>} />
             {/* Admin page: login required; backend enforces superadmin */}
             <Route path="/admin" element={<ProtectedRoute><AdminDashboard /></ProtectedRoute>} />
             
             {/* Common routes */}
             <Route path="/timesheets" element={<ProtectedRoute><Timesheets /></ProtectedRoute>} />
-            <Route path="/timesheet-approvals" element={<ProtectedRoute allowedRoles={['manager', 'hr', 'director', 'ceo']}><TimesheetApprovals /></ProtectedRoute>} />
+            <Route path="/timesheet-approvals" element={<ProtectedRoute allowedRoles={['manager', 'hr', 'director', 'ceo', 'admin']}><TimesheetApprovals /></ProtectedRoute>} />
             <Route path="/leaves" element={<ProtectedRoute><LeaveRequests /></ProtectedRoute>} />
             <Route path="/org-chart" element={<ProtectedRoute><OrgChart /></ProtectedRoute>} />
             <Route path="/onboarding" element={<ProtectedRoute><Onboarding /></ProtectedRoute>} />
             <Route path="/change-password" element={<ProtectedRoute><ChangePassword /></ProtectedRoute>} />
             <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
-            <Route path="/appraisals" element={<ProtectedRoute allowedRoles={['manager', 'hr', 'director', 'ceo']}><Appraisals /></ProtectedRoute>} />
+            <Route path="/appraisals" element={<ProtectedRoute allowedRoles={['manager', 'hr', 'director', 'ceo', 'admin']}><Appraisals /></ProtectedRoute>} />
             <Route path="/my-appraisal" element={<ProtectedRoute><MyAppraisal /></ProtectedRoute>} />
-            <Route path="/shifts" element={<ProtectedRoute allowedRoles={['hr', 'director', 'ceo']}><ShiftManagement /></ProtectedRoute>} />
+            <Route path="/shifts" element={<ProtectedRoute allowedRoles={['hr', 'director', 'ceo', 'admin']}><ShiftManagement /></ProtectedRoute>} />
             <Route path="/ai-assistant" element={<ProtectedRoute><AIAssistantPage /></ProtectedRoute>} />
-            <Route path="/attendance/upload" element={<ProtectedRoute allowedRoles={['hr', 'director', 'ceo']}><AttendanceUpload /></ProtectedRoute>} />
-            <Route path="/attendance/history" element={<ProtectedRoute allowedRoles={['hr', 'director', 'ceo']}><AttendanceUploadHistory /></ProtectedRoute>} />
+            <Route path="/attendance/upload" element={<ProtectedRoute allowedRoles={['hr', 'director', 'ceo', 'admin']}><AttendanceUpload /></ProtectedRoute>} />
+            <Route path="/attendance/history" element={<ProtectedRoute allowedRoles={['hr', 'director', 'ceo', 'admin']}><AttendanceUploadHistory /></ProtectedRoute>} />
             
             {/* Redirects */}
             <Route path="/" element={<Navigate to="/dashboard" />} />

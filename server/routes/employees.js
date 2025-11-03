@@ -267,7 +267,7 @@ router.get('/:id', authenticateToken, async (req, res) => {
   }
 });
 
-// Create employee (HR/CEO only)
+// Create employee (HR/CEO/Director/Admin only)
 router.post('/', authenticateToken, async (req, res) => {
   try {
     // Check role
@@ -277,7 +277,7 @@ router.post('/', authenticateToken, async (req, res) => {
     );
     const userRole = roleResult.rows[0]?.role;
     
-    if (!userRole || !['hr', 'director', 'ceo'].includes(userRole)) {
+    if (!userRole || !['hr', 'director', 'ceo', 'admin'].includes(userRole)) {
       return res.status(403).json({ error: 'Insufficient permissions' });
     }
     const {
@@ -540,46 +540,179 @@ router.patch('/:id', authenticateToken, async (req, res) => {
 });
 
 // Bulk CSV import
-router.post('/import', authenticateToken, requireRole('hr', 'director', 'ceo'), upload.single('file'), async (req, res) => {
+router.post('/import', authenticateToken, requireRole('hr', 'director', 'ceo', 'admin'), upload.single('file'), async (req, res) => {
   if (!req.file) return res.status(400).json({ error: 'Missing file' });
   const errors = [];
   let imported = 0;
   // Parse CSV rows
   let records;
   try {
-    records = parse(req.file.buffer.toString('utf8'), {
+    const csvContent = req.file.buffer.toString('utf8');
+    console.log('CSV file received, size:', csvContent.length, 'bytes');
+    console.log('First 500 chars of CSV:', csvContent.substring(0, 500));
+    
+    records = parse(csvContent, {
       columns: true,
-      skip_empty_lines: true
+      skip_empty_lines: true,
+      trim: true,
+      bom: true // Handle UTF-8 BOM
     });
+    
+    console.log(`Parsed ${records.length} rows from CSV`);
+    if (records.length === 0) {
+      return res.status(400).json({ 
+        error: 'CSV file appears to be empty or has no valid rows',
+        imported_count: 0,
+        failed_count: 0,
+        errors: ['No rows found in CSV file']
+      });
+    }
+    console.log('First row sample:', JSON.stringify(records[0], null, 2));
   } catch (e) {
-    return res.status(400).json({ error: 'Invalid CSV file' });
+    console.error('CSV parsing error:', e);
+    return res.status(400).json({ 
+      error: 'Invalid CSV file: ' + e.message,
+      imported_count: 0,
+      failed_count: 0,
+      errors: ['Failed to parse CSV: ' + e.message]
+    });
   }
   // Get org/tenant
   const tenantResult = await query('SELECT tenant_id FROM profiles WHERE id = $1', [req.user.id]);
   const tenantId = tenantResult.rows[0]?.tenant_id;
   if (!tenantId) return res.status(403).json({ error: 'No organization found' });
 
+  console.log(`Processing ${records.length} rows from CSV for tenant ${tenantId}`);
+  const managerMappings = []; // Store employee_id -> manager_email mappings for second pass
   for (const [idx, row] of records.entries()) {
+    console.log(`Row ${idx + 2}:`, row);
+    // Normalize column names (case-insensitive)
+    const normalizedRow = {};
+    for (const [key, value] of Object.entries(row)) {
+      const normalizedKey = key.toLowerCase().trim();
+      normalizedRow[normalizedKey] = value ? String(value).trim() : '';
+    }
     const {
-      firstName, lastName, email, employeeId, department, position, workLocation,
-      joinDate, grade, managerEmail, role = 'employee'
-    } = row;
-    if (!firstName || !lastName || !email || !employeeId || !role) {
-      errors.push(`Row ${idx + 2}: Missing required fields`);
+      firstname, lastname, email, employeeid, department, position, worklocation,
+      joindate, grade, manageremail, role
+    } = normalizedRow;
+    
+    // Map normalized keys back to expected names
+    const firstName = (firstname || normalizedRow['first_name'] || '').trim();
+    const lastName = (lastname || normalizedRow['last_name'] || '').trim();
+    const employeeId = (employeeid || normalizedRow['employee_id'] || '').trim();
+    const workLocation = (worklocation || normalizedRow['work_location'] || '').trim();
+    let joinDate = (joindate || normalizedRow['join_date'] || '').trim();
+    const managerEmail = (manageremail || normalizedRow['manager_email'] || '').trim();
+    const deptValue = (department || normalizedRow['department'] || '').trim();
+    const posValue = (position || normalizedRow['position'] || '').trim();
+    
+    // Normalize role (case-insensitive, handle common variations)
+    const roleValue = (role || '').trim().toLowerCase();
+    const roleMapping = {
+      'employee': 'employee',
+      'hr': 'hr',
+      'ceo': 'ceo',
+      'director': 'director',
+      'manager': 'manager',
+      'admin': 'admin'
+    };
+    const validatedRole = roleMapping[roleValue] || 'employee';
+    if (roleValue && !roleMapping[roleValue]) {
+      console.log(`Row ${idx + 2}: Invalid role '${role}', defaulting to 'employee'`);
+    }
+    
+    // Validate required fields
+    if (!firstName || !lastName || !email || !employeeId) {
+      const missing = [];
+      if (!firstName) missing.push('firstName');
+      if (!lastName) missing.push('lastName');
+      if (!email) missing.push('email');
+      if (!employeeId) missing.push('employeeId');
+      const errorMsg = `Row ${idx + 2}: Missing required fields: ${missing.join(', ')}. Found: firstName="${firstName}", lastName="${lastName}", email="${email}", employeeId="${employeeId}"`;
+      errors.push(errorMsg);
+      console.log(`Row ${idx + 2} skipped:`, errorMsg);
+      console.log(`Raw row data:`, row);
       continue;
     }
-    // Find reporting_manager_id if managerEmail present
-    let reportingManagerId = null;
-    if (managerEmail) {
-      const mgrRes = await query('SELECT e.id FROM employees e JOIN profiles p ON p.id = e.user_id WHERE lower(p.email) = lower($1)', [managerEmail]);
-      if (mgrRes.rows.length) reportingManagerId = mgrRes.rows[0].id;
+    
+    // Validate email format
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      const errorMsg = `Row ${idx + 2}: Invalid email format: "${email}"`;
+      errors.push(errorMsg);
+      console.log(errorMsg);
+      continue;
     }
-    // Deduplicate by email
-    const existing = await query('SELECT id FROM profiles WHERE lower(email) = lower($1)', [email]);
+    
+    // Parse and normalize date format (handle DD-MM-YYYY, MM-DD-YYYY, YYYY-MM-DD, etc.)
+    let normalizedJoinDate = null;
+    if (joinDate) {
+      try {
+        // Try to parse various date formats
+        const dateParts = joinDate.split(/[-\/]/);
+        if (dateParts.length === 3) {
+          let year, month, day;
+          // Check if first part is likely year (4 digits)
+          if (dateParts[0].length === 4) {
+            // YYYY-MM-DD or YYYY/MM/DD
+            year = dateParts[0];
+            month = dateParts[1].padStart(2, '0');
+            day = dateParts[2].padStart(2, '0');
+          } else {
+            // Assume DD-MM-YYYY (most common in Indian format)
+            day = dateParts[0].padStart(2, '0');
+            month = dateParts[1].padStart(2, '0');
+            year = dateParts[2];
+          }
+          // Validate year is reasonable (1900-2100)
+          const yearNum = parseInt(year);
+          if (yearNum >= 1900 && yearNum <= 2100) {
+            normalizedJoinDate = `${year}-${month}-${day}`;
+            // Validate it's a valid date
+            const testDate = new Date(normalizedJoinDate);
+            if (isNaN(testDate.getTime())) {
+              normalizedJoinDate = null;
+              console.log(`Row ${idx + 2}: Invalid date format '${joinDate}', will be set to null`);
+            }
+          } else {
+            console.log(`Row ${idx + 2}: Invalid year in date '${joinDate}', will be set to null`);
+          }
+        } else {
+          console.log(`Row ${idx + 2}: Invalid date format '${joinDate}', will be set to null`);
+        }
+      } catch (e) {
+        console.log(`Row ${idx + 2}: Error parsing date '${joinDate}':`, e.message);
+      }
+    }
+    
+    // Store manager email for later lookup (after all employees are created)
+    // We'll import employees first, then update manager relationships
+    // Deduplicate by email (check both in CSV being imported and existing in DB)
+    const existing = await query('SELECT id FROM profiles WHERE lower(email) = lower($1) AND tenant_id = $2', [email, tenantId]);
     if (existing.rows.length) {
-      errors.push(`Row ${idx + 2}: Email ${email} already exists`);
+      const errorMsg = `Row ${idx + 2}: Email ${email} already exists in database`;
+      errors.push(errorMsg);
+      console.log(errorMsg);
       continue;
     }
+    
+    // Check for duplicate employeeId in same CSV (within current import)
+    const duplicateEmployeeId = records.slice(0, idx).some(r => {
+      const normalized = {};
+      for (const [k, v] of Object.entries(r)) {
+        normalized[k.toLowerCase().trim()] = String(v || '').trim();
+      }
+      const otherId = normalized['employeeid'] || normalized['employee_id'] || '';
+      return otherId && otherId.toLowerCase() === employeeId.toLowerCase();
+    });
+    if (duplicateEmployeeId) {
+      const errorMsg = `Row ${idx + 2}: Duplicate employeeId "${employeeId}" found in CSV file`;
+      errors.push(errorMsg);
+      console.log(errorMsg);
+      continue;
+    }
+    
     // Use same logic as normal employee create (in transaction for safety)
     try {
       await query('BEGIN');
@@ -601,29 +734,75 @@ router.post('/import', authenticateToken, requireRole('hr', 'director', 'ceo'), 
          VALUES ($1, $2)`,
         [userId, hashedPassword]
       );
-      // Create employee record
+      // Create employee record (manager relationship will be set later)
       await query(
         `INSERT INTO employees (
           user_id, employee_id, department, position, work_location,
           join_date, reporting_manager_id, tenant_id, must_change_password,
           onboarding_status
         ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, true, 'not_started')`,
-        [userId, employeeId, department, position, workLocation, joinDate || null, reportingManagerId, tenantId]
+        [userId, employeeId, deptValue || null, posValue || null, workLocation || null, normalizedJoinDate, null, tenantId]
       );
       // Create user role
       await query(
         `INSERT INTO user_roles (user_id, role, tenant_id)
          VALUES ($1, $2, $3)`,
-        [userId, role, tenantId]
+        [userId, validatedRole, tenantId]
       );
       await query('COMMIT');
       imported++;
+      console.log(`Row ${idx + 2}: Successfully imported ${email} (employee_id: ${employeeId})`);
+      
+      // Store manager email mapping for second pass
+      if (managerEmail) {
+        managerMappings.push({
+          employeeId: employeeId,
+          managerEmail: managerEmail,
+          rowIndex: idx + 2
+        });
+      }
     } catch (err) {
       await query('ROLLBACK');
-      errors.push(`Row ${idx + 2}: ${err?.message || 'Unknown error'}`);
+      const errorMsg = err?.message || 'Unknown error';
+      errors.push(`Row ${idx + 2}: ${errorMsg}`);
+      console.error(`Row ${idx + 2} error:`, errorMsg, err);
     }
   }
-  res.json({ imported, errors });
+  
+  // Second pass: Update manager relationships
+  console.log(`Updating manager relationships... (${managerMappings.length} relationships to update)`);
+  let managerUpdates = 0;
+  for (const mapping of managerMappings) {
+    try {
+      // Find the manager by email
+      const mgrRes = await query(
+        'SELECT e.id FROM employees e JOIN profiles p ON p.id = e.user_id WHERE lower(p.email) = lower($1) AND e.tenant_id = $2',
+        [mapping.managerEmail, tenantId]
+      );
+      if (mgrRes.rows.length) {
+        const managerId = mgrRes.rows[0].id;
+        // Update employee with manager relationship
+        await query(
+          'UPDATE employees SET reporting_manager_id = $1 WHERE employee_id = $2 AND tenant_id = $3',
+          [managerId, mapping.employeeId, tenantId]
+        );
+        managerUpdates++;
+        console.log(`Updated manager relationship for employee ${mapping.employeeId} -> manager ${mapping.managerEmail}`);
+      } else {
+        console.log(`Warning: Manager with email ${mapping.managerEmail} not found for employee ${mapping.employeeId} (Row ${mapping.rowIndex})`);
+      }
+    } catch (err) {
+      console.error(`Error updating manager relationship for employee ${mapping.employeeId}:`, err.message);
+    }
+  }
+  console.log(`Updated ${managerUpdates} manager relationships`);
+  console.log(`Import complete: ${imported} imported, ${errors.length} errors`);
+  res.json({ 
+    imported_count: imported, 
+    failed_count: errors.length,
+    imported,
+    errors 
+  });
 });
 
 export default router;

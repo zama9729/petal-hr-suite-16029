@@ -35,6 +35,7 @@ const onboardingSchema = z.object({
   ifscCode: z.string().trim().min(1, "Required"),
   panNumber: z.string().trim().min(10, "Invalid PAN").max(10),
   aadharNumber: z.string().trim().min(12, "Invalid Aadhar").max(12),
+  passportNumber: z.string().trim().optional(),
 });
 
 export default function Onboarding() {
@@ -67,6 +68,7 @@ export default function Onboarding() {
     ifscCode: "",
     panNumber: "",
     aadharNumber: "",
+    passportNumber: "",
   });
 
   useEffect(() => {
@@ -137,6 +139,7 @@ export default function Onboarding() {
         ifscCode: validated.ifscCode,
         panNumber: validated.panNumber,
         aadharNumber: validated.aadharNumber,
+        passportNumber: validated.passportNumber || null,
       });
 
       toast({
@@ -353,6 +356,15 @@ export default function Onboarding() {
                     onChange={(e) => setFormData({ ...formData, aadharNumber: e.target.value })}
                     maxLength={12}
                     required
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="passportNumber">Passport Number (Optional)</Label>
+                  <Input
+                    id="passportNumber"
+                    value={formData.passportNumber}
+                    onChange={(e) => setFormData({ ...formData, passportNumber: e.target.value })}
+                    placeholder="Enter passport number if available"
                   />
                 </div>
               </div>

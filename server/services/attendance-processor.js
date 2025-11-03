@@ -2,6 +2,7 @@ import { query } from '../db/pool.js';
 import { parse } from 'csv-parse/sync';
 import XLSX from 'xlsx';
 import crypto from 'crypto';
+import { selectEmployeeHolidays } from './holidays.js';
 
 /**
  * Process attendance upload file (CSV or Excel)
@@ -89,7 +90,67 @@ export async function processAttendanceUpload(uploadId, fileBuffer, filename, te
           continue;
         }
 
-        // Check for duplicates using row hash
+        // Check if date is a weekend (Saturday = 6, Sunday = 0)
+        const workDate = new Date(normalized.work_date);
+        const dayOfWeek = workDate.getDay();
+        if (dayOfWeek === 0 || dayOfWeek === 6) {
+          await query(
+            `UPDATE attendance_upload_rows 
+             SET status = 'ignored', error_message = 'Skipped - weekend'
+             WHERE upload_id = $1 AND row_number = $2`,
+            [uploadId, rowNumber]
+          );
+          ignoredCount++;
+          continue;
+        }
+
+        // Check if date is a holiday
+        const isHoliday = await checkIfHoliday(normalized.employee_id, normalized.work_date, tenantId);
+        if (isHoliday) {
+          await query(
+            `UPDATE attendance_upload_rows 
+             SET status = 'ignored', error_message = 'Skipped - holiday'
+             WHERE upload_id = $1 AND row_number = $2`,
+            [uploadId, rowNumber]
+          );
+          ignoredCount++;
+          continue;
+        }
+
+        // Check for existing timesheet entry for this employee and date
+        // Allow overwriting by deleting the old entry if it exists
+        const existingEntryResult = await query(
+          `SELECT te.id, te.timesheet_id
+           FROM timesheet_entries te
+           WHERE te.employee_id = $1 
+             AND te.work_date = $2
+             AND te.source = 'upload'
+           LIMIT 1`,
+          [normalized.employee_id, normalized.work_date]
+        );
+
+        if (existingEntryResult.rows.length > 0) {
+          // Delete the existing entry to allow overwrite
+          const existingEntry = existingEntryResult.rows[0];
+          await query(
+            `DELETE FROM timesheet_entries WHERE id = $1`,
+            [existingEntry.id]
+          );
+          
+          // Recalculate timesheet total hours
+          await query(
+            `UPDATE timesheets 
+             SET total_hours = (
+               SELECT COALESCE(SUM(hours), 0) 
+               FROM timesheet_entries 
+               WHERE timesheet_id = $1
+             )
+             WHERE id = $1`,
+            [existingEntry.timesheet_id]
+          );
+        }
+
+        // Check for duplicates in current upload using row hash
         const rowHash = calculateRowHash(
           tenantId,
           normalized.employee_id,
@@ -99,21 +160,15 @@ export async function processAttendanceUpload(uploadId, fileBuffer, filename, te
           'upload'
         );
 
-        const existingResult = await query(
+        const existingUploadRowResult = await query(
           `SELECT id FROM attendance_upload_rows 
-           WHERE row_hash = $1 AND status = 'success'`,
-          [rowHash]
+           WHERE row_hash = $1 AND status = 'success' AND upload_id != $2`,
+          [rowHash, uploadId]
         );
 
-        if (existingResult.rows.length > 0) {
-          await query(
-            `UPDATE attendance_upload_rows 
-             SET status = 'ignored', error_message = 'Duplicate record', row_hash = $1
-             WHERE upload_id = $2 AND row_number = $3`,
-            [rowHash, uploadId, rowNumber]
-          );
-          ignoredCount++;
-          continue;
+        if (existingUploadRowResult.rows.length > 0) {
+          // Same data in a previous upload - still process it as user wants overwrite capability
+          // Don't skip, continue processing
         }
 
         // Update row with normalized data and hash
@@ -390,16 +445,38 @@ async function createTimesheetEntryFromAttendance(normalized, uploadId, rowNumbe
 
   let timesheetId;
   if (timesheetResult.rows.length === 0) {
-    // Create new timesheet
-    const newTimesheetResult = await query(
-      `INSERT INTO timesheets (employee_id, week_start_date, week_end_date, total_hours, tenant_id)
-       VALUES ($1, $2, $3, $4, $5)
-       RETURNING id`,
-      [normalized.employee_id, weekStart, weekEnd, 0, tenantId]
-    );
-    timesheetId = newTimesheetResult.rows[0].id;
+    // Create new timesheet with status 'pending' (not submitted)
+    // Attendance uploads should not auto-submit timesheets - user must submit manually
+    // Try to set submitted_at to NULL first (if migration has been run)
+    // If constraint doesn't allow NULL, omit the column to use DEFAULT now()
+    // In that case, status='pending' still indicates it needs manual submission
+    try {
+      const newTimesheetResult = await query(
+        `INSERT INTO timesheets (employee_id, week_start_date, week_end_date, total_hours, tenant_id, status, submitted_at)
+         VALUES ($1, $2, $3, $4, $5, 'pending', NULL)
+         RETURNING id`,
+        [normalized.employee_id, weekStart, weekEnd, 0, tenantId]
+      );
+      timesheetId = newTimesheetResult.rows[0].id;
+    } catch (error) {
+      // If NULL is not allowed (migration not run yet), omit submitted_at to use DEFAULT
+      // This will still set status='pending' which indicates it needs manual submission
+      if (error.message && error.message.includes('submitted_at') && error.message.includes('null value')) {
+        const newTimesheetResult = await query(
+          `INSERT INTO timesheets (employee_id, week_start_date, week_end_date, total_hours, tenant_id, status)
+           VALUES ($1, $2, $3, $4, $5, 'pending')
+           RETURNING id`,
+          [normalized.employee_id, weekStart, weekEnd, 0, tenantId]
+        );
+        timesheetId = newTimesheetResult.rows[0].id;
+      } else {
+        throw error;
+      }
+    }
   } else {
     timesheetId = timesheetResult.rows[0].id;
+    // Don't modify submission status - user must submit manually
+    // Just add the attendance entry to the existing timesheet
   }
 
   // Get upload row ID
@@ -583,6 +660,56 @@ function getWeekEnd(weekStart) {
   const start = new Date(weekStart);
   start.setDate(start.getDate() + 6);
   return start.toISOString().split('T')[0];
+}
+
+/**
+ * Check if a date is a holiday for an employee
+ */
+async function checkIfHoliday(employeeId, workDate, tenantId) {
+  try {
+    // Get employee info (state, holiday_override)
+    const empResult = await query(
+      `SELECT state, holiday_override FROM employees WHERE id = $1`,
+      [employeeId]
+    );
+
+    if (empResult.rows.length === 0) {
+      return false;
+    }
+
+    const employee = empResult.rows[0];
+    const dateObj = new Date(workDate);
+    const year = dateObj.getFullYear();
+    const month = dateObj.getMonth() + 1; // JavaScript months are 0-indexed
+
+    // Check holiday override first
+    const override = employee.holiday_override;
+    if (override && override[`${year}-${String(month).padStart(2, '0')}`]) {
+      const overrideDates = override[`${year}-${String(month).padStart(2, '0')}`];
+      const dateStr = workDate instanceof Date ? workDate.toISOString().slice(0, 10) : String(workDate).slice(0, 10);
+      if (overrideDates.includes(dateStr)) {
+        return true;
+      }
+    }
+
+    // Check published holidays
+    const holidays = await selectEmployeeHolidays({
+      orgId: tenantId,
+      employee: employee,
+      year: year,
+      month: month
+    });
+
+    const dateStr = workDate instanceof Date ? workDate.toISOString().slice(0, 10) : String(workDate).slice(0, 10);
+    return holidays.some(h => {
+      const holidayDate = h.date instanceof Date ? h.date.toISOString().slice(0, 10) : String(h.date).slice(0, 10);
+      return holidayDate === dateStr;
+    });
+  } catch (error) {
+    console.error('Error checking holiday:', error);
+    // On error, don't skip - allow attendance to be processed
+    return false;
+  }
 }
 
 /**

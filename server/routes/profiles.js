@@ -36,6 +36,20 @@ router.post('/me/presence', authenticateToken, async (req, res) => {
       return res.status(400).json({ error: 'Invalid presence status' });
     }
 
+    // Check if employee exists
+    const empCheck = await query(
+      `SELECT id FROM employees WHERE user_id = $1`,
+      [req.user.id]
+    );
+
+    // If employee doesn't exist, return success with default (for admin/CEO who haven't created employee record)
+    if (empCheck.rows.length === 0) {
+      return res.json({
+        presence_status: presence_status,
+        has_active_leave: false
+      });
+    }
+
     // Check for active approved leave
     const leaveCheck = await query(
       `SELECT has_active_approved_leave(e.id) as has_active_leave
@@ -81,14 +95,24 @@ router.get('/me/presence', authenticateToken, async (req, res) => {
       [req.user.id]
     );
 
+    // If employee not found, return default presence status (for admin/CEO who haven't created employee record)
     if (result.rows.length === 0) {
-      return res.status(404).json({ error: 'Employee not found' });
+      return res.json({
+        presence_status: 'online',
+        last_presence_update: null,
+        has_active_leave: false
+      });
     }
 
     res.json(result.rows[0]);
   } catch (error) {
     console.error('Error fetching presence status:', error);
-    res.status(500).json({ error: error.message });
+    // Return default on error instead of failing
+    res.json({
+      presence_status: 'online',
+      last_presence_update: null,
+      has_active_leave: false
+    });
   }
 });
 

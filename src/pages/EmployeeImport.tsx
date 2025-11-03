@@ -35,27 +35,27 @@ export default function EmployeeImport() {
     }
     setImporting(true);
     try {
+      // Get tenant_id from user's profile
+      let orgId = '';
+      try {
+        const profile = await api.getProfile();
+        orgId = profile?.tenant_id || '';
+        if (!orgId) {
+          setApiError('Could not resolve your organization. Please ensure your profile is properly set up.');
+          setImporting(false);
+          return;
+        }
+      } catch (error: any) {
+        setApiError('Failed to fetch your profile: ' + (error.message || 'Unknown error'));
+        setImporting(false);
+        return;
+      }
+
       const formData = new FormData();
       formData.append('csv', file);
       formData.append('mapping', JSON.stringify(mapping || {}));
       formData.append('preview', 'false');
       formData.append('fail_on_error', 'false');
-      let orgId = localStorage.getItem('tenant_id') || '';
-      if (!orgId) {
-        try {
-          const resp = await fetch(`${import.meta.env.VITE_API_URL}/api/organizations/me`, {
-            headers: { Authorization: `Bearer ${token}` }
-          });
-          const org = await resp.json().catch(()=>null);
-          orgId = org?.id || '';
-          if (orgId) localStorage.setItem('tenant_id', orgId);
-        } catch {}
-      }
-      if (!orgId) {
-        setApiError('Could not resolve your organization. Please reload and try again.');
-        setImporting(false);
-        return;
-      }
       const response = await fetch(`${import.meta.env.VITE_API_URL}/api/v1/orgs/${orgId}/employees/import`, {
         method: 'POST',
         headers: {
@@ -103,25 +103,25 @@ export default function EmployeeImport() {
     }
     setImporting(true);
     try {
-      const formData = new FormData();
-      formData.append('csv', file);
-      formData.append('preview', 'true');
-      let orgId = localStorage.getItem('tenant_id') || '';
-      if (!orgId) {
-        try {
-          const resp = await fetch(`${import.meta.env.VITE_API_URL}/api/organizations/me`, {
-            headers: { Authorization: `Bearer ${token}` }
-          });
-          const org = await resp.json().catch(()=>null);
-          orgId = org?.id || '';
-          if (orgId) localStorage.setItem('tenant_id', orgId);
-        } catch {}
-      }
-      if (!orgId) {
-        setApiError('Could not resolve your organization. Please reload and try again.');
+      // Get tenant_id from user's profile
+      let orgId = '';
+      try {
+        const profile = await api.getProfile();
+        orgId = profile?.tenant_id || '';
+        if (!orgId) {
+          setApiError('Could not resolve your organization. Please ensure your profile is properly set up.');
+          setImporting(false);
+          return;
+        }
+      } catch (error: any) {
+        setApiError('Failed to fetch your profile: ' + (error.message || 'Unknown error'));
         setImporting(false);
         return;
       }
+
+      const formData = new FormData();
+      formData.append('csv', file);
+      formData.append('preview', 'true');
       const response = await fetch(`${import.meta.env.VITE_API_URL}/api/v1/orgs/${orgId}/employees/import`, {
         method: 'POST',
         headers: { Authorization: token ? `Bearer ${token}` : '' },
@@ -139,13 +139,17 @@ export default function EmployeeImport() {
   };
 
   const downloadTemplate = () => {
-    const csvContent = "firstName,lastName,email,employeeId,role,joinDate,grade,managerEmail,workLocation\nJohn,Doe,john.doe@company.com,EMP001,Engineer,2024-01-15,Senior,manager@company.com,Remote";
-    const blob = new Blob([csvContent], { type: 'text/csv' });
+    // Correct template with all required fields
+    const csvContent = `firstName,lastName,email,employeeId,role,department,position,joinDate,managerEmail,workLocation
+John,Doe,john.doe@company.com,EMP001,employee,Engineering,Software Engineer,2024-01-15,manager@company.com,Remote
+Jane,Smith,jane.smith@company.com,EMP002,employee,Engineering,Senior Engineer,2024-02-01,,Hyderabad`;
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     const url = window.URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
     a.download = 'employee_import_template.csv';
     a.click();
+    window.URL.revokeObjectURL(url);
   };
 
   return (
@@ -170,10 +174,11 @@ export default function EmployeeImport() {
             <div className="mt-4 p-4 bg-muted rounded-lg">
               <p className="text-sm font-medium mb-2">Template includes:</p>
               <ul className="text-sm text-muted-foreground space-y-1 list-disc list-inside">
-                <li>firstName, lastName, email (required)</li>
-                <li>employeeId, role, department (required)</li>
-                <li>joinDate, grade, managerEmail, workLocation</li>
+                <li><strong>Required:</strong> firstName, lastName, email, employeeId</li>
+                <li><strong>Optional:</strong> role (defaults to 'employee'), department, position</li>
+                <li><strong>Optional:</strong> joinDate (format: YYYY-MM-DD or DD-MM-YYYY), managerEmail, workLocation</li>
               </ul>
+              <p className="text-xs text-muted-foreground mt-2">Note: Column names are case-insensitive. Supported formats: firstName, firstname, first_name</p>
             </div>
           </CardContent>
         </Card>

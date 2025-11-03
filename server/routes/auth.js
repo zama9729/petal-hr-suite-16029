@@ -61,10 +61,10 @@ router.post('/signup', async (req, res) => {
         [userId, email, firstName, lastName, orgId]
       );
 
-      // Create user role (CEO for first user)
+      // Create user role (admin for signups)
       await query(
         `INSERT INTO user_roles (user_id, role, tenant_id)
-         VALUES ($1, 'ceo', $2)`,
+         VALUES ($1, 'admin', $2)`,
         [userId, orgId]
       );
 
@@ -79,7 +79,7 @@ router.post('/signup', async (req, res) => {
 
       // Generate JWT token
       const token = jwt.sign(
-        { id: userId, email, role: 'ceo' },
+        { id: userId, email, role: 'admin' },
         process.env.JWT_SECRET || 'your-secret-key',
         { expiresIn: '7d' }
       );
@@ -87,7 +87,7 @@ router.post('/signup', async (req, res) => {
       res.status(201).json({
         success: true,
         token,
-        user: { id: userId, email, firstName, lastName, role: 'ceo' }
+        user: { id: userId, email, firstName, lastName, role: 'admin' }
       });
     } catch (error) {
       await query('ROLLBACK');

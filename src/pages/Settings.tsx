@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useAuth } from "@/contexts/AuthContext";
-import { supabase } from "@/integrations/supabase/client";
+import { api } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
 import { Building2, Upload, Loader2 } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -14,14 +14,15 @@ export default function Settings() {
   const { user, userRole } = useAuth();
   const { toast } = useToast();
   const [isLoading, setIsLoading] = useState(false);
-  const [isCEO, setIsCEO] = useState(false);
+  const [canEdit, setCanEdit] = useState(false);
   const [organization, setOrganization] = useState<any>(null);
   const [orgName, setOrgName] = useState("");
   const [logoFile, setLogoFile] = useState<File | null>(null);
   const [logoPreview, setLogoPreview] = useState<string>("");
 
   useEffect(() => {
-    setIsCEO(userRole === 'ceo');
+    // Admin, CEO, Director, HR can edit
+    setCanEdit(['admin', 'ceo', 'director', 'hr'].includes(userRole || ''));
     if (user) {
       fetchOrganization();
     }
@@ -29,27 +30,19 @@ export default function Settings() {
 
   const fetchOrganization = async () => {
     try {
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('tenant_id')
-        .eq('id', user?.id)
-        .single();
-
-      if (profile?.tenant_id) {
-        const { data: org } = await supabase
-          .from('organizations')
-          .select('*')
-          .eq('id', profile.tenant_id)
-          .single();
-
-        if (org) {
-          setOrganization(org);
-          setOrgName(org.name);
-          setLogoPreview(org.logo_url || "");
-        }
+      const org = await api.getOrganization();
+      if (org) {
+        setOrganization(org);
+        setOrgName(org.name || "");
+        setLogoPreview(org.logo_url || "");
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error fetching organization:', error);
+      toast({
+        title: "Error",
+        description: error.message || "Failed to fetch organization details",
+        variant: "destructive",
+      });
     }
   };
 
@@ -66,10 +59,19 @@ export default function Settings() {
   };
 
   const handleSave = async () => {
-    if (!isCEO) {
+    if (!canEdit) {
       toast({
         title: "Access denied",
-        description: "Only CEO can update organization settings.",
+        description: "Only Admin, CEO, Director, or HR can update organization settings.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (!orgName.trim()) {
+      toast({
+        title: "Validation error",
+        description: "Organization name is required.",
         variant: "destructive",
       });
       return;
@@ -77,47 +79,32 @@ export default function Settings() {
 
     setIsLoading(true);
     try {
-      let logoUrl = organization?.logo_url;
+      const updateData: { name?: string; logo?: File } = {
+        name: orgName.trim(),
+      };
 
-      // Upload logo if changed
       if (logoFile) {
-        const fileExt = logoFile.name.split('.').pop();
-        const fileName = `${organization.id}/logo.${fileExt}`;
-        
-        const { error: uploadError } = await supabase.storage
-          .from('org-logos')
-          .upload(fileName, logoFile, { upsert: true });
-
-        if (uploadError) throw uploadError;
-
-        const { data: { publicUrl } } = supabase.storage
-          .from('org-logos')
-          .getPublicUrl(fileName);
-
-        logoUrl = publicUrl;
+        updateData.logo = logoFile;
       }
 
-      // Update organization
-      const { error: updateError } = await supabase
-        .from('organizations')
-        .update({
-          name: orgName,
-          logo_url: logoUrl,
-        })
-        .eq('id', organization.id);
-
-      if (updateError) throw updateError;
+      const updatedOrg = await api.updateOrganization(updateData);
 
       toast({
         title: "Settings updated",
         description: "Organization settings have been saved successfully.",
       });
 
+      // Update local state
+      setOrganization(updatedOrg);
+      setLogoPreview(updatedOrg.logo_url || "");
+      setLogoFile(null); // Clear file input
+      
+      // Refresh organization data
       fetchOrganization();
     } catch (error: any) {
       toast({
         title: "Update failed",
-        description: error.message,
+        description: error.message || "Failed to update organization settings",
         variant: "destructive",
       });
     } finally {
@@ -138,21 +125,21 @@ export default function Settings() {
             <CardHeader>
               <CardTitle>Organization Branding</CardTitle>
               <CardDescription>
-                {isCEO 
+                {canEdit 
                   ? "Customize your organization's name and logo" 
-                  : "Only CEOs can modify organization branding"}
+                  : "Only Admin, CEO, Director, or HR can modify organization branding"}
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
               <div className="space-y-2">
                 <Label htmlFor="orgName">Organization Name</Label>
-                <Input
-                  id="orgName"
-                  value={orgName}
-                  onChange={(e) => setOrgName(e.target.value)}
-                  disabled={!isCEO || isLoading}
-                  placeholder="Your Organization Name"
-                />
+                  <Input
+                    id="orgName"
+                    value={orgName}
+                    onChange={(e) => setOrgName(e.target.value)}
+                    disabled={!canEdit || isLoading}
+                    placeholder="Your Organization Name"
+                  />
               </div>
 
               <div className="space-y-4">
@@ -168,23 +155,23 @@ export default function Settings() {
                     <Input
                       id="logo"
                       type="file"
-                      accept="image/*"
+                      accept="image/jpeg,image/jpg,image/png,image/webp,image/gif"
                       onChange={handleLogoChange}
-                      disabled={!isCEO || isLoading}
+                      disabled={!canEdit || isLoading}
                       className="hidden"
                     />
                     <Label
                       htmlFor="logo"
-                      className={`flex items-center gap-2 cursor-pointer ${!isCEO ? 'opacity-50 cursor-not-allowed' : ''}`}
+                      className={`flex items-center gap-2 ${!canEdit ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
                     >
                       <Button
                         type="button"
                         variant="outline"
-                        disabled={!isCEO || isLoading}
-                        onClick={() => document.getElementById('logo')?.click()}
+                        disabled={!canEdit || isLoading}
+                        onClick={() => canEdit && document.getElementById('logo')?.click()}
                       >
                         <Upload className="h-4 w-4 mr-2" />
-                        Upload Logo
+                        {logoFile ? 'Change Logo' : 'Upload Logo'}
                       </Button>
                     </Label>
                     <p className="text-xs text-muted-foreground mt-2">
@@ -194,7 +181,7 @@ export default function Settings() {
                 </div>
               </div>
 
-              {isCEO && (
+              {canEdit && (
                 <Button onClick={handleSave} disabled={isLoading}>
                   {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                   Save Changes

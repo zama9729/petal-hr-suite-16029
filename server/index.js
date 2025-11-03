@@ -35,6 +35,8 @@ import attendanceRoutes from './routes/attendance.js';
 import { setTenantContext } from './middleware/tenant.js';
 import { scheduleHolidayNotifications } from './services/cron.js';
 import { createAttendanceTables } from './utils/createAttendanceTables.js';
+import { ensureAdminRole } from './utils/runMigration.js';
+import { ensureOnboardingColumns } from './utils/ensureOnboardingColumns.js';
 
 dotenv.config();
 
@@ -102,6 +104,22 @@ app.get('/discovery', (req, res, next) => {
 // Initialize database pool
 createPool().then(async () => {
   console.log('✅ Database connection pool created');
+  
+  // Ensure admin role exists in app_role enum
+  try {
+    await ensureAdminRole();
+  } catch (error) {
+    console.error('Error ensuring admin role:', error);
+    console.warn('⚠️  Please manually run: ALTER TYPE app_role ADD VALUE IF NOT EXISTS \'admin\';');
+  }
+  
+  // Ensure onboarding_data table has all required columns
+  try {
+    await ensureOnboardingColumns();
+  } catch (error) {
+    console.error('Error ensuring onboarding columns:', error);
+    console.warn('⚠️  Please manually run the migration to add onboarding columns');
+  }
   
   // Ensure attendance tables exist
   try {

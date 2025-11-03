@@ -75,7 +75,7 @@ export default function Employees() {
     }
   };
 
-  const isHROrAbove = userRole === 'hr' || userRole === 'director' || userRole === 'ceo';
+  const isHROrAbove = userRole === 'hr' || userRole === 'director' || userRole === 'ceo' || userRole === 'admin';
   const isManagerOrAbove = isHROrAbove || userRole === 'manager';
 
   const handleAssignShift = (employee: Employee) => {

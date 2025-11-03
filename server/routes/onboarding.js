@@ -188,18 +188,18 @@ router.post('/submit', authenticateToken, async (req, res) => {
           permanent_address, permanent_city, permanent_state, permanent_postal_code,
           current_address, current_city, current_state, current_postal_code,
           bank_account_number, bank_name, bank_branch, ifsc_code,
-          pan_number, aadhar_number, completed_at, tenant_id
+          pan_number, aadhar_number, passport_number, completed_at, tenant_id
         )
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, now(), $23)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, now(), $24)
         ON CONFLICT (employee_id) 
         DO UPDATE SET
           emergency_contact_name = $2,
           emergency_contact_phone = $3,
           emergency_contact_relation = $4,
-          address = COALESCE($5, current_address),
-          city = COALESCE($6, current_city),
-          state = COALESCE($7, current_state),
-          postal_code = COALESCE($8, current_postal_code),
+          address = COALESCE($5, onboarding_data.current_address),
+          city = COALESCE($6, onboarding_data.current_city),
+          state = COALESCE($7, onboarding_data.current_state),
+          postal_code = COALESCE($8, onboarding_data.current_postal_code),
           permanent_address = $9,
           permanent_city = $10,
           permanent_state = $11,
@@ -214,8 +214,9 @@ router.post('/submit', authenticateToken, async (req, res) => {
           ifsc_code = $20,
           pan_number = $21,
           aadhar_number = $22,
+          passport_number = $23,
           completed_at = now(),
-          tenant_id = $23,
+          tenant_id = $24,
           updated_at = now()`,
         [
           employeeId,
@@ -240,6 +241,7 @@ router.post('/submit', authenticateToken, async (req, res) => {
           onboardingData.ifscCode,
           onboardingData.panNumber,
           onboardingData.aadharNumber,
+          onboardingData.passportNumber || null,
           tenantId
         ]
       );

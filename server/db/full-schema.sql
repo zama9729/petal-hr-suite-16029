@@ -6,7 +6,7 @@ CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 CREATE EXTENSION IF NOT EXISTS "pgcrypto";
 
 -- Create enum types
-CREATE TYPE app_role AS ENUM ('employee', 'manager', 'hr', 'director', 'ceo');
+CREATE TYPE app_role AS ENUM ('employee', 'manager', 'hr', 'director', 'ceo', 'admin');
 CREATE TYPE onboarding_status AS ENUM ('pending', 'in_progress', 'completed', 'not_started');
 CREATE TYPE leave_type AS ENUM ('annual', 'sick', 'casual', 'maternity', 'paternity', 'bereavement');
 
@@ -101,6 +101,7 @@ CREATE TABLE onboarding_data (
   ifsc_code TEXT,
   pan_number TEXT,
   aadhar_number TEXT,
+  passport_number TEXT,
   tenant_id UUID REFERENCES organizations(id) ON DELETE CASCADE,
   completed_at TIMESTAMP WITH TIME ZONE,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT now(),
@@ -326,6 +327,7 @@ AS $$
   SELECT role FROM user_roles
   WHERE user_id = _user_id
   ORDER BY CASE role
+    WHEN 'admin' THEN 0
     WHEN 'ceo' THEN 1
     WHEN 'director' THEN 2
     WHEN 'hr' THEN 3

@@ -142,6 +142,22 @@ class ApiClient {
     return this.request('/api/organizations/me');
   }
 
+  async updateOrganization(data: { name?: string; logo?: File }) {
+    const formData = new FormData();
+    if (data.name) {
+      formData.append('name', data.name);
+    }
+    if (data.logo) {
+      formData.append('logo', data.logo);
+    }
+
+    return this.request('/api/organizations/me', {
+      method: 'PATCH',
+      body: formData,
+      headers: {} as HeadersInit, // Let browser set Content-Type with boundary
+    }, true);
+  }
+
   // Stats methods
   async getPendingCounts() {
     return this.request('/api/stats/pending-counts');
@@ -523,6 +539,12 @@ class ApiClient {
 
   async getAttendanceUploads() {
     return this.request('/api/v1/attendance/uploads');
+  }
+
+  async cancelUpload(uploadId: string) {
+    return this.request(`/api/v1/attendance/upload/${uploadId}/cancel`, {
+      method: 'POST',
+    });
   }
 }
 

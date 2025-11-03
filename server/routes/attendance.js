@@ -216,7 +216,7 @@ router.post('/punch', authenticateToken, punchRateLimit, async (req, res) => {
 
 // POST /api/v1/attendance/upload
 // Bulk upload CSV/Excel file
-router.post('/upload', authenticateToken, requireRole('hr', 'director', 'ceo'), (req, res, next) => {
+router.post('/upload', authenticateToken, requireRole('hr', 'director', 'ceo', 'admin'), (req, res, next) => {
   upload.single('file')(req, res, (err) => {
     if (err) {
       console.error('Multer error:', err);
@@ -426,7 +426,7 @@ router.get('/employee/:employee_id/timesheet', authenticateToken, async (req, re
 });
 
 // GET /api/v1/attendance/uploads
-router.get('/uploads', authenticateToken, requireRole('hr', 'director', 'ceo'), async (req, res) => {
+router.get('/uploads', authenticateToken, requireRole('hr', 'director', 'ceo', 'admin'), async (req, res) => {
   try {
     // Get user's tenant_id
     const tenantResult = await query(
@@ -467,7 +467,7 @@ router.get('/uploads', authenticateToken, requireRole('hr', 'director', 'ceo'), 
 });
 
 // POST /api/v1/attendance/upload/:upload_id/retry
-router.post('/upload/:upload_id/retry', authenticateToken, requireRole('hr', 'director', 'ceo'), async (req, res) => {
+router.post('/upload/:upload_id/retry', authenticateToken, requireRole('hr', 'director', 'ceo', 'admin'), async (req, res) => {
   try {
     const { upload_id } = req.params;
     const { force } = req.body;
@@ -531,6 +531,58 @@ router.post('/upload/:upload_id/retry', authenticateToken, requireRole('hr', 'di
   } catch (error) {
     console.error('Retry upload error:', error);
     res.status(500).json({ error: error.message || 'Failed to retry upload' });
+  }
+});
+
+// Cancel/Stop processing for a stuck upload
+router.post('/upload/:upload_id/cancel', authenticateToken, requireRole('hr', 'director', 'ceo', 'admin'), async (req, res) => {
+  try {
+    const { upload_id } = req.params;
+    
+    // Check if upload exists and is in processing state
+    const uploadResult = await query(
+      `SELECT id, status FROM attendance_uploads WHERE id = $1`,
+      [upload_id]
+    );
+
+    if (uploadResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Upload not found' });
+    }
+
+    const upload = uploadResult.rows[0];
+    
+    if (upload.status !== 'processing' && upload.status !== 'pending') {
+      return res.status(400).json({ 
+        error: `Cannot cancel upload with status: ${upload.status}. Only processing or pending uploads can be cancelled.` 
+      });
+    }
+
+    // Update upload status to failed
+    await query(
+      `UPDATE attendance_uploads
+       SET status = 'failed', 
+           processed_at = now(),
+           error_summary = $1
+       WHERE id = $2`,
+      [JSON.stringify({ error: 'Cancelled by user', cancelled_at: new Date().toISOString() }), upload_id]
+    );
+
+    // Mark any pending rows as failed
+    await query(
+      `UPDATE attendance_upload_rows
+       SET status = 'failed', 
+           error_message = 'Upload cancelled by user'
+       WHERE upload_id = $1 AND status IN ('pending')`,
+      [upload_id]
+    );
+
+    res.json({
+      message: 'Upload cancelled successfully',
+      upload_id: upload_id
+    });
+  } catch (error) {
+    console.error('Cancel upload error:', error);
+    res.status(500).json({ error: error.message || 'Failed to cancel upload' });
   }
 });
 

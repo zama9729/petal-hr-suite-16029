@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
 import { useState, useEffect } from 'react';
 import { api } from '@/lib/api';
-import { Download, RefreshCw, FileText, CheckCircle2, XCircle, Clock, AlertCircle, Eye } from 'lucide-react';
+import { Download, RefreshCw, FileText, CheckCircle2, XCircle, Clock, AlertCircle, Eye, X } from 'lucide-react';
 import {
   Table,
   TableBody,
@@ -88,6 +88,23 @@ export default function AttendanceUploadHistory() {
       toast({
         title: 'Error',
         description: error.message || 'Failed to retry upload',
+        variant: 'destructive',
+      });
+    }
+  };
+
+  const handleCancel = async (uploadId: string) => {
+    try {
+      await api.cancelUpload(uploadId);
+      toast({
+        title: 'Upload cancelled',
+        description: 'The upload processing has been stopped',
+      });
+      fetchUploadHistory();
+    } catch (error: any) {
+      toast({
+        title: 'Error',
+        description: error.message || 'Failed to cancel upload',
         variant: 'destructive',
       });
     }
@@ -201,7 +218,17 @@ export default function AttendanceUploadHistory() {
                           >
                             <Eye className="h-4 w-4" />
                           </Button>
-                          {upload.failed_rows > 0 && (
+                          {(upload.status === 'processing' || upload.status === 'pending') && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleCancel(upload.id)}
+                              className="text-red-600 hover:text-red-700"
+                            >
+                              <X className="h-4 w-4" />
+                            </Button>
+                          )}
+                          {upload.failed_rows > 0 && upload.status !== 'processing' && (
                             <Button
                               variant="ghost"
                               size="sm"

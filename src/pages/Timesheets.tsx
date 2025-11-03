@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectTrigger, SelectContent, SelectItem, SelectValue } from "@/components/ui/select";
-import { Clock, Save, Check, X, Calendar as CalendarIcon, RotateCcw } from "lucide-react";
+import { Clock, Save, Check, X, Calendar as CalendarIcon, RotateCcw, Plus, Trash2 } from "lucide-react";
 import { api } from "@/lib/api";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
@@ -46,7 +46,7 @@ interface Shift {
 export default function Timesheets() {
   const [currentWeek, setCurrentWeek] = useState<Date>(startOfWeek(new Date(), { weekStartsOn: 1 }));
   const [timesheet, setTimesheet] = useState<Timesheet | null>(null);
-  const [entries, setEntries] = useState<Record<string, TimesheetEntry>>({});
+  const [entries, setEntries] = useState<Record<string, TimesheetEntry[]>>({});
   const [shifts, setShifts] = useState<Record<string, Shift>>({});
   const [holidays, setHolidays] = useState<any[]>([]);
   const [holidayCalendar, setHolidayCalendar] = useState<any>({});
@@ -289,29 +289,40 @@ export default function Timesheets() {
           }
         }
         
-        // Update entry with correct is_holiday flag
-        if (updatedEntries[dateStr]) {
-          updatedEntries[dateStr] = {
-            ...updatedEntries[dateStr],
-            is_holiday: isHoliday,
-            // If it's a holiday and has no description, set it to "Holiday"
-            description: isHoliday && !updatedEntries[dateStr].description 
-              ? "Holiday" 
-              : updatedEntries[dateStr].description,
-            // If it's a holiday, clear project_id and project_type
-            project_id: isHoliday ? null : updatedEntries[dateStr].project_id,
-            project_type: isHoliday ? null : updatedEntries[dateStr].project_type,
-          };
-        } else {
+        // Update entry array with correct is_holiday flag
+        const existingEntries = updatedEntries[dateStr] || [];
+        if (existingEntries.length === 0) {
           // Create new entry if it doesn't exist
-          updatedEntries[dateStr] = {
+          updatedEntries[dateStr] = [{
             work_date: dateStr,
             hours: 0,
             description: isHoliday ? "Holiday" : "",
             project_id: null,
             project_type: null,
             is_holiday: isHoliday,
-          };
+          }];
+        } else {
+          // Update existing entries, but keep holiday entries as-is
+          updatedEntries[dateStr] = existingEntries.map(entry => {
+            if (isHoliday && !entry.is_holiday) {
+              // Convert to holiday entry
+              return {
+                ...entry,
+                is_holiday: true,
+                description: "Holiday",
+                project_id: null,
+                project_type: null,
+              };
+            } else if (!isHoliday && entry.is_holiday) {
+              // Convert from holiday entry to regular entry
+              return {
+                ...entry,
+                is_holiday: false,
+                description: entry.description === "Holiday" ? "" : entry.description,
+              };
+            }
+            return entry;
+          });
         }
       });
       
@@ -322,14 +333,17 @@ export default function Timesheets() {
   // Ensure entries are initialized
   useEffect(() => {
     if (Object.keys(entries).length === 0 && weekDays.length > 0) {
-      const emptyEntries: Record<string, TimesheetEntry> = {};
+      const emptyEntries: Record<string, TimesheetEntry[]> = {};
       weekDays.forEach((day) => {
         const dateStr = format(day, "yyyy-MM-dd");
-        emptyEntries[dateStr] = {
+        emptyEntries[dateStr] = [{
           work_date: dateStr,
           hours: 0,
           description: "",
-        };
+          project_id: null,
+          project_type: null,
+          is_holiday: false,
+        }];
       });
       setEntries(emptyEntries);
     }
@@ -346,8 +360,8 @@ export default function Timesheets() {
       // Fetch existing timesheet (this now returns holidays even if timesheet doesn't exist)
       const timesheetData = await api.getTimesheet(weekStart, weekEnd);
 
-      // Map entries by date (including holidays)
-      const entriesMap: Record<string, TimesheetEntry> = {};
+      // Map entries by date - group multiple entries per day
+      const entriesMap: Record<string, TimesheetEntry[]> = {};
       
       // First, process existing timesheet entries if any
       if (timesheetData?.entries && Array.isArray(timesheetData.entries)) {
@@ -362,12 +376,15 @@ export default function Timesheets() {
             console.warn('Entry missing work_date, skipping:', entry);
             return;
           }
-          // Use the date as the key and ensure work_date is set on the entry
-          entriesMap[workDate] = {
+          // Group entries by date - multiple entries per day
+          if (!entriesMap[workDate]) {
+            entriesMap[workDate] = [];
+          }
+          entriesMap[workDate].push({
             ...entry,
             work_date: workDate,
             is_holiday: entry.is_holiday || false, // Ensure this is set
-          };
+          });
         });
       }
       
@@ -412,35 +429,47 @@ export default function Timesheets() {
       weekDays.forEach((day) => {
         const dateStr = format(day, "yyyy-MM-dd");
         
-        // If holiday exists for this date, mark it as holiday
+        // If holiday exists for this date, ensure at least one holiday entry
         if (allHolidays[dateStr]) {
-          entriesMap[dateStr] = {
-            ...(entriesMap[dateStr] || {}),
-            work_date: dateStr,
-            hours: entriesMap[dateStr]?.hours || 0,
-            description: entriesMap[dateStr]?.description || "Holiday",
-            is_holiday: true,
-            project_id: null,
-            project_type: null,
-          };
-        } else if (!entriesMap[dateStr]) {
+          if (!entriesMap[dateStr] || entriesMap[dateStr].length === 0) {
+            entriesMap[dateStr] = [{
+              work_date: dateStr,
+              hours: 0,
+              description: "Holiday",
+              is_holiday: true,
+              project_id: null,
+              project_type: null,
+            }];
+          } else {
+            // Update first entry to holiday if not already
+            if (!entriesMap[dateStr][0]?.is_holiday) {
+              entriesMap[dateStr][0] = {
+                ...entriesMap[dateStr][0],
+                is_holiday: true,
+                description: "Holiday",
+                project_id: null,
+                project_type: null,
+              };
+            }
+          }
+        } else if (!entriesMap[dateStr] || entriesMap[dateStr].length === 0) {
           // Create empty entry if it doesn't exist
-          entriesMap[dateStr] = {
+          entriesMap[dateStr] = [{
             work_date: dateStr,
             hours: 0,
             description: "",
             project_id: null,
             project_type: null,
             is_holiday: false,
-          };
+          }];
         } else {
           // Ensure existing entries have project_id and project_type
-          entriesMap[dateStr] = {
-            ...entriesMap[dateStr],
-            is_holiday: entriesMap[dateStr].is_holiday || false,
-            project_id: entriesMap[dateStr].project_id || null,
-            project_type: entriesMap[dateStr].project_type || null,
-          };
+          entriesMap[dateStr] = entriesMap[dateStr].map(entry => ({
+            ...entry,
+            is_holiday: entry.is_holiday || false,
+            project_id: entry.project_id || null,
+            project_type: entry.project_type || null,
+          }));
         }
       });
       
@@ -455,16 +484,17 @@ export default function Timesheets() {
     } catch (error) {
       console.error("Error fetching timesheet:", error);
       // Initialize empty entries on error
-      const emptyEntries: Record<string, TimesheetEntry> = {};
+      const emptyEntries: Record<string, TimesheetEntry[]> = {};
       weekDays.forEach((day) => {
         const dateStr = format(day, "yyyy-MM-dd");
-        emptyEntries[dateStr] = {
+        emptyEntries[dateStr] = [{
           work_date: dateStr,
           hours: 0,
           description: "",
           project_id: null,
           project_type: null,
-        };
+          is_holiday: false,
+        }];
       });
       setEntries(emptyEntries);
     }
@@ -502,34 +532,50 @@ export default function Timesheets() {
           const updatedEntries = { ...prevEntries };
           
           Object.entries(shiftsMap).forEach(([date, shift]) => {
-            if (updatedEntries[date]) {
-              // Calculate hours from shift times
-              const startTime = parseFloat(shift.start_time.replace(':', '.'));
-              let endTime = parseFloat(shift.end_time.replace(':', '.'));
-              
-              // Handle overnight shifts
-              if (endTime < startTime) {
-                endTime += 24;
-              }
-              
-              const hours = endTime - startTime;
-              
-              // Auto-fill if no manual entry exists or hours are 0
-              if (!updatedEntries[date].hours || updatedEntries[date].hours === 0) {
-                updatedEntries[date] = {
-                  ...updatedEntries[date],
-                  hours,
+            const dayEntries = updatedEntries[date] || [];
+            
+            // Calculate hours from shift times
+            const [startHour, startMin] = shift.start_time.split(':').map(Number);
+            const [endHour, endMin] = shift.end_time.split(':').map(Number);
+            
+            const startMinutes = startHour * 60 + startMin;
+            const endMinutes = endHour * 60 + endMin;
+            
+            // Handle overnight shifts (end time before start time)
+            let diffMinutes = endMinutes - startMinutes;
+            if (diffMinutes < 0) {
+              diffMinutes += 24 * 60; // Add 24 hours
+            }
+            
+            const hours = diffMinutes / 60;
+            
+            // Auto-fill if no manual entry exists or first entry has 0 hours
+            if (dayEntries.length === 0 || (dayEntries[0] && (!dayEntries[0].hours || dayEntries[0].hours === 0))) {
+              if (dayEntries.length === 0) {
+                updatedEntries[date] = [{
+                  work_date: date,
+                  hours: hours,
                   description: `Shift: ${shift.shift_type} (${shift.start_time} - ${shift.end_time})${shift.notes ? ` - ${shift.notes}` : ''}`,
-                };
+                  project_id: null,
+                  project_type: null,
+                  is_holiday: false,
+                }];
               } else {
-                // Add shift info to description if already has hours
-                const existingDesc = updatedEntries[date].description || '';
-                if (!existingDesc.includes('Shift:')) {
-                  updatedEntries[date] = {
-                    ...updatedEntries[date],
-                    description: `${existingDesc} | Shift: ${shift.shift_type} (${shift.start_time} - ${shift.end_time})`.trim(),
-                  };
-                }
+                // Update first entry
+                updatedEntries[date] = [{
+                  ...dayEntries[0],
+                  hours: hours,
+                  description: `Shift: ${shift.shift_type} (${shift.start_time} - ${shift.end_time})${shift.notes ? ` - ${shift.notes}` : ''}`,
+                }];
+              }
+            } else {
+              // Add shift info to description if already has hours
+              const existingDesc = dayEntries[0]?.description || '';
+              if (!existingDesc.includes('Shift:')) {
+                updatedEntries[date] = [{
+                  ...dayEntries[0],
+                  description: `${existingDesc} | Shift: ${shift.shift_type} (${shift.start_time} - ${shift.end_time})`.trim(),
+                }, ...dayEntries.slice(1)];
               }
             }
           });
@@ -543,19 +589,56 @@ export default function Timesheets() {
     }
   };
 
-  const updateEntry = (date: string, field: "hours" | "description" | "project_id" | "project_type", value: string | number | null) => {
-    setEntries((prev) => ({
-      ...prev,
-      [date]: {
-        work_date: date, // Always ensure work_date is set
-        hours: prev[date]?.hours || 0,
-        description: prev[date]?.description || "",
-        project_id: prev[date]?.project_id || null,
-        project_type: prev[date]?.project_type || null,
-        ...prev[date],
-        [field]: field === "hours" ? parseFloat(value as string) || 0 : value,
-      },
-    }));
+  // Add a new entry for a specific date
+  const addEntry = (date: string) => {
+    setEntries((prev) => {
+      const existingEntries = prev[date] || [];
+      const newEntry: TimesheetEntry = {
+        work_date: date,
+        hours: 0,
+        description: "",
+        project_id: null,
+        project_type: null,
+        is_holiday: false,
+      };
+      return {
+        ...prev,
+        [date]: [...existingEntries, newEntry],
+      };
+    });
+  };
+
+  // Remove an entry by index
+  const removeEntry = (date: string, index: number) => {
+    setEntries((prev) => {
+      const existingEntries = prev[date] || [];
+      if (existingEntries.length <= 1) {
+        // Keep at least one entry per day
+        return prev;
+      }
+      return {
+        ...prev,
+        [date]: existingEntries.filter((_, i) => i !== index),
+      };
+    });
+  };
+
+  // Update a specific entry by index
+  const updateEntry = (date: string, index: number, field: "hours" | "description" | "project_id" | "project_type", value: string | number | null) => {
+    setEntries((prev) => {
+      const existingEntries = prev[date] || [];
+      const updatedEntries = [...existingEntries];
+      if (updatedEntries[index]) {
+        updatedEntries[index] = {
+          ...updatedEntries[index],
+          [field]: field === "hours" ? parseFloat(value as string) || 0 : value,
+        };
+      }
+      return {
+        ...prev,
+        [date]: updatedEntries,
+      };
+    });
   };
 
   const calculateTotal = (): number => {
@@ -563,17 +646,21 @@ export default function Timesheets() {
       if (!entries || typeof entries !== 'object' || Object.keys(entries).length === 0) {
         return 0;
       }
-      const total = Object.values(entries).reduce((sum, entry) => {
-        if (!entry || typeof entry !== 'object') return sum;
-        let hours = 0;
-        if (typeof entry.hours === 'number') {
-          hours = entry.hours;
-        } else if (typeof entry.hours === 'string') {
-          hours = parseFloat(entry.hours) || 0;
-        } else {
-          hours = 0;
-        }
-        return sum + hours;
+      const total = Object.values(entries).reduce((sum, entryArray) => {
+        if (!Array.isArray(entryArray)) return sum;
+        const dayTotal = entryArray.reduce((daySum, entry) => {
+          if (!entry || typeof entry !== 'object') return daySum;
+          let hours = 0;
+          if (typeof entry.hours === 'number') {
+            hours = entry.hours;
+          } else if (typeof entry.hours === 'string') {
+            hours = parseFloat(entry.hours) || 0;
+          } else {
+            hours = 0;
+          }
+          return daySum + hours;
+        }, 0);
+        return sum + dayTotal;
       }, 0);
       const result = Number(total);
       return Number.isNaN(result) ? 0 : result;
@@ -603,19 +690,20 @@ export default function Timesheets() {
       const weekEnd = format(addDays(currentWeek, 6), "yyyy-MM-dd");
       const hoursToSave = calculateTotal();
 
-      // Prepare entries - ensure all required fields are present
-      // Convert entries object to array, using the key as work_date if missing
-      const entriesArray = Object.keys(entries)
-        .filter((dateKey) => {
-          const entry = entries[dateKey];
-          // Only include entries that have hours > 0
-          return entry && (Number(entry.hours) || 0) > 0;
-        })
-        .map((dateKey) => {
-          const entry = entries[dateKey];
+      // Prepare entries - flatten multiple entries per day into a single array
+      // Convert entries object (Record<string, TimesheetEntry[]>) to flat array
+      const entriesArray: any[] = [];
+      
+      Object.keys(entries).forEach((dateKey) => {
+        const entryArray = entries[dateKey] || [];
+        
+        entryArray.forEach((entry) => {
+          // Skip holiday entries and entries with no hours
+          if (entry.is_holiday || !entry || (Number(entry.hours) || 0) <= 0) {
+            return;
+          }
           
-          // ALWAYS use dateKey as the primary source for work_date (it's the key in the entries object)
-          // dateKey should be in YYYY-MM-DD format
+          // ALWAYS use dateKey as the primary source for work_date
           let workDate = dateKey;
           
           // If entry has work_date, try to normalize it to YYYY-MM-DD format
@@ -658,14 +746,15 @@ export default function Timesheets() {
             }
           }
           
-          return {
+          entriesArray.push({
             work_date: workDate, // ALWAYS set work_date
             hours: Number(entry?.hours) || 0,
             description: String(entry?.description || ''),
             project_id: entry?.project_id || null,
             project_type: entry?.project_type || null,
-          };
+          });
         });
+      });
 
       // Final validation - ensure all entries have valid work_date and skip holiday entries
       const entriesToSave = entriesArray.filter((entry) => {
@@ -704,8 +793,8 @@ export default function Timesheets() {
       if (timesheetData) {
         setTimesheet(timesheetData as any);
         
-        // Map entries by date
-        const entriesMap: Record<string, TimesheetEntry> = {};
+        // Map entries by date - group multiple entries per day
+        const entriesMap: Record<string, TimesheetEntry[]> = {};
         (timesheetData as any).entries?.forEach((entry: any) => {
           // Convert work_date to YYYY-MM-DD format if it's an ISO string
           let workDate = entry.work_date;
@@ -717,11 +806,14 @@ export default function Timesheets() {
             console.warn('Entry missing work_date, skipping:', entry);
             return;
           }
-          // Use the date as the key and ensure work_date is set on the entry
-          entriesMap[workDate] = {
+          // Group entries by date - multiple entries per day
+          if (!entriesMap[workDate]) {
+            entriesMap[workDate] = [];
+          }
+          entriesMap[workDate].push({
             ...entry,
             work_date: workDate,
-          };
+          });
         });
         setEntries(entriesMap);
       }
@@ -853,90 +945,29 @@ export default function Timesheets() {
               <thead>
                 <tr className="border-b">
                   <th className="text-left p-3 font-semibold w-32">Day</th>
-                  {weekDays.map((day) => {
-                    const dateStr = format(day, "yyyy-MM-dd");
-                    const hasShift = shifts[dateStr];
-                    return (
-                      <th
-                        key={day.toISOString()}
-                        className={`text-center p-3 font-semibold min-w-[120px] ${
-                          isToday(day) ? "bg-primary/10" : ""
-                        }`}
-                      >
-                        <div className="flex items-center justify-center gap-1">
-                          {format(day, "EEE")}
-                          {hasShift && (
-                            <CalendarIcon className="h-3 w-3 text-primary" title="Scheduled shift" />
-                          )}
-                        </div>
-                        <div className="text-sm font-normal text-muted-foreground">
-                          {format(day, "MMM dd")}
-                        </div>
-                      </th>
-                    );
-                  })}
+                  <th className="text-center p-3 font-semibold min-w-[100px]">Hours</th>
+                  <th className="text-center p-3 font-semibold min-w-[200px]">Project / Task</th>
                   <th className="text-center p-3 font-semibold w-28">Total</th>
                 </tr>
               </thead>
               <tbody>
-                <tr className="border-b">
-                  <td className="p-3 font-medium">Hours</td>
-                  {weekDays.map((day) => {
-                    const dateStr = format(day, "yyyy-MM-dd");
-                    const entry = entries[dateStr] || { work_date: dateStr, hours: 0, description: "" };
-                    const hasShift = shifts[dateStr];
-                    const isHoliday = isDateHoliday(dateStr);
-                    const holidayName = holidays.find(h => normalizeDate(h.date) === dateStr)?.name || 
-                                       (timesheet?.holidayCalendar?.find((h: any) => normalizeDate(h.date) === dateStr)?.name) ||
-                                       'Holiday';
-                    
-                    return (
-                      <td
-                        key={dateStr}
-                        className={`p-2 ${isToday(day) ? "bg-primary/10" : ""} ${hasShift ? "relative" : ""} ${isHoliday ? "bg-green-50 dark:bg-green-950/20" : ""}`}
-                      >
-                        {hasShift && (
-                          <Badge variant="outline" className="absolute -top-2 -right-1 text-xs">
-                            {shifts[dateStr].shift_type}
-                          </Badge>
-                        )}
-                        {isHoliday && (
-                          <Badge variant="outline" className="mb-1 text-xs bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400">
-                            <CalendarIcon className="h-3 w-3 mr-1" />
-                            Holiday
-                          </Badge>
-                        )}
-                        <Input
-                          type="number"
-                          step="0.5"
-                          min="0"
-                          max="24"
-                          value={entry.hours || ""}
-                          onChange={(e) => updateEntry(dateStr, "hours", e.target.value)}
-                          className="text-center"
-                          disabled={!isEditable || isHoliday}
-                          placeholder="0"
-                        />
-                      </td>
-                    );
-                  })}
-                  <td className="p-3 text-center font-bold text-lg">
-                    {(totalHours || 0).toFixed(1)}
-                  </td>
-                </tr>
-                <tr>
-                  <td className="p-3 font-medium">Project / Task</td>
-                  {weekDays.map((day) => {
-                    const dateStr = format(day, "yyyy-MM-dd");
-                    const entry = entries[dateStr] || { work_date: dateStr, hours: 0, description: "", project_id: null, project_type: null };
-                    const isHoliday = isDateHoliday(dateStr);
-                    const holidayName = holidays.find(h => normalizeDate(h.date) === dateStr)?.name || 
-                                       (timesheet?.holidayCalendar?.find((h: any) => normalizeDate(h.date) === dateStr)?.name) ||
-                                       'Holiday';
+                {/* Render entries for each day - multiple entries per day */}
+                {weekDays.map((day) => {
+                  const dateStr = format(day, "yyyy-MM-dd");
+                  const dayEntries = entries[dateStr] || [{ work_date: dateStr, hours: 0, description: "", project_id: null, project_type: null, is_holiday: false }];
+                  const hasShift = shifts[dateStr];
+                  const isHoliday = isDateHoliday(dateStr);
+                  
+                  // Calculate day total
+                  const dayTotal = dayEntries.reduce((sum, e) => sum + (Number(e.hours) || 0), 0);
+                  
+                  return dayEntries.map((entry, entryIndex) => {
+                    const isFirstEntry = entryIndex === 0;
+                    const isLastEntry = entryIndex === dayEntries.length - 1;
                     
                     // Determine current value for select
                     let currentValue = '';
-                    if (isHoliday) {
+                    if (isHoliday && entry.is_holiday) {
                       currentValue = 'holiday';
                     } else if (entry.project_id) {
                       currentValue = `project-${entry.project_id}`;
@@ -949,73 +980,154 @@ export default function Timesheets() {
                     }
                     
                     return (
-                      <td
-                        key={dateStr}
-                        className={`p-2 ${isToday(day) ? "bg-primary/10" : ""} ${isHoliday ? "bg-green-50 dark:bg-green-950/20" : ""}`}
-                      >
-                        {isHoliday ? (
-                          <Input
-                            type="text"
-                            value="Holiday"
-                            disabled
-                            className="text-green-700 dark:text-green-400 font-medium"
-                            readOnly
-                          />
-                        ) : (
-                          <Select
-                            value={currentValue}
-                            onValueChange={(value) => {
-                              if (value === 'holiday') return; // Should not happen
-                              
-                              if (value.startsWith('project-')) {
-                                // Employee selected an assigned project
-                                const projectId = value.replace('project-', '');
-                                const project = assignedProjects.find(p => p.project_id === projectId);
-                                updateEntry(dateStr, "project_id", projectId);
-                                updateEntry(dateStr, "project_type", null); // Clear project_type when using project_id
-                                updateEntry(dateStr, "description", project?.project_name || '');
-                              } else if (value === 'non-billable') {
-                                // Employee selected non-billable project
-                                updateEntry(dateStr, "project_id", null); // Clear project_id when using project_type
-                                updateEntry(dateStr, "project_type", 'non-billable');
-                                updateEntry(dateStr, "description", 'Non-billable project');
-                              } else if (value === 'internal') {
-                                // Employee selected internal project
-                                updateEntry(dateStr, "project_id", null); // Clear project_id when using project_type
-                                updateEntry(dateStr, "project_type", 'internal');
-                                updateEntry(dateStr, "description", 'Internal project');
-                              } else {
-                                // Clear all project fields
-                                updateEntry(dateStr, "project_id", null);
-                                updateEntry(dateStr, "project_type", null);
-                                updateEntry(dateStr, "description", '');
-                              }
-                            }}
-                            disabled={!isEditable}
-                          >
-                            <SelectTrigger className="w-full">
-                              <SelectValue placeholder="Select project" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {assignedProjects.length > 0 && (
-                                <>
-                                  {assignedProjects.map((proj) => (
-                                    <SelectItem key={proj.project_id} value={`project-${proj.project_id}`}>
-                                      {proj.project_name}
-                                    </SelectItem>
-                                  ))}
-                                  <div className="border-t my-1" />
-                                </>
+                      <tr key={`${dateStr}-${entryIndex}`} className="border-b">
+                        {/* Day label - only show on first entry per day */}
+                        {isFirstEntry && (
+                          <td rowSpan={dayEntries.length} className="p-3 font-medium align-top">
+                            <div className="flex items-center gap-1">
+                              {format(day, "EEE")}
+                              {hasShift && (
+                                <CalendarIcon className="h-3 w-3 text-primary" title="Scheduled shift" />
                               )}
-                              <SelectItem value="non-billable">Non-billable project</SelectItem>
-                              <SelectItem value="internal">Internal project</SelectItem>
-                            </SelectContent>
-                          </Select>
+                            </div>
+                            <div className="text-xs text-muted-foreground mt-1">
+                              {format(day, "MMM dd")}
+                            </div>
+                            {isHoliday && entry.is_holiday && (
+                              <Badge variant="outline" className="mt-2 text-xs bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400">
+                                <CalendarIcon className="h-3 w-3 mr-1" />
+                                Holiday
+                              </Badge>
+                            )}
+                          </td>
                         )}
-                      </td>
+                        
+                        {/* Hours input */}
+                        <td className={`p-2 align-top ${isToday(day) ? "bg-primary/10" : ""} ${isHoliday && entry.is_holiday ? "bg-green-50 dark:bg-green-950/20" : ""}`}>
+                          {isFirstEntry && hasShift && (
+                            <Badge variant="outline" className="mb-1 text-xs">
+                              {shifts[dateStr].shift_type}
+                            </Badge>
+                          )}
+                          <Input
+                            type="number"
+                            step="0.5"
+                            min="0"
+                            max="24"
+                            value={entry.hours || ""}
+                            onChange={(e) => updateEntry(dateStr, entryIndex, "hours", e.target.value)}
+                            className="text-center"
+                            disabled={!isEditable || (isHoliday && entry.is_holiday)}
+                            placeholder="0"
+                          />
+                        </td>
+                        
+                        {/* Project/Task select */}
+                        <td className={`p-2 align-top ${isToday(day) ? "bg-primary/10" : ""} ${isHoliday && entry.is_holiday ? "bg-green-50 dark:bg-green-950/20" : ""}`}>
+                          {isHoliday && entry.is_holiday ? (
+                            <Input
+                              type="text"
+                              value="Holiday"
+                              disabled
+                              className="text-green-700 dark:text-green-400 font-medium"
+                              readOnly
+                            />
+                          ) : (
+                            <div className="space-y-1">
+                              <Select
+                                value={currentValue}
+                                onValueChange={(value) => {
+                                  if (value === 'holiday') return;
+                                  
+                                  if (value.startsWith('project-')) {
+                                    const projectId = value.replace('project-', '');
+                                    const project = assignedProjects.find(p => p.project_id === projectId);
+                                    updateEntry(dateStr, entryIndex, "project_id", projectId);
+                                    updateEntry(dateStr, entryIndex, "project_type", null);
+                                    updateEntry(dateStr, entryIndex, "description", project?.project_name || '');
+                                  } else if (value === 'non-billable') {
+                                    updateEntry(dateStr, entryIndex, "project_id", null);
+                                    updateEntry(dateStr, entryIndex, "project_type", 'non-billable');
+                                    updateEntry(dateStr, entryIndex, "description", 'Non-billable project');
+                                  } else if (value === 'internal') {
+                                    updateEntry(dateStr, entryIndex, "project_id", null);
+                                    updateEntry(dateStr, entryIndex, "project_type", 'internal');
+                                    updateEntry(dateStr, entryIndex, "description", 'Internal project');
+                                  } else {
+                                    updateEntry(dateStr, entryIndex, "project_id", null);
+                                    updateEntry(dateStr, entryIndex, "project_type", null);
+                                    updateEntry(dateStr, entryIndex, "description", '');
+                                  }
+                                }}
+                                disabled={!isEditable}
+                              >
+                                <SelectTrigger className="w-full">
+                                  <SelectValue placeholder="Select project" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  {assignedProjects.length > 0 && (
+                                    <>
+                                      {assignedProjects.map((proj) => (
+                                        <SelectItem key={proj.project_id} value={`project-${proj.project_id}`}>
+                                          {proj.project_name}
+                                        </SelectItem>
+                                      ))}
+                                      <div className="border-t my-1" />
+                                    </>
+                                  )}
+                                  <SelectItem value="non-billable">Non-billable project</SelectItem>
+                                  <SelectItem value="internal">Internal project</SelectItem>
+                                </SelectContent>
+                              </Select>
+                              
+                              {/* Add/Remove buttons */}
+                              {isEditable && (
+                                <div className="flex items-center gap-1">
+                                  {isLastEntry && (
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      className="h-7 w-7 p-0"
+                                      onClick={() => addEntry(dateStr)}
+                                      title="Add another entry for this day"
+                                    >
+                                      <Plus className="h-3.5 w-3.5" />
+                                    </Button>
+                                  )}
+                                  {dayEntries.length > 1 && (
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      className="h-7 w-7 p-0 text-red-600 hover:text-red-700"
+                                      onClick={() => removeEntry(dateStr, entryIndex)}
+                                      title="Remove this entry"
+                                    >
+                                      <Trash2 className="h-3.5 w-3.5" />
+                                    </Button>
+                                  )}
+                                </div>
+                              )}
+                            </div>
+                          )}
+                        </td>
+                        
+                        {/* Total column - only show on first entry per day */}
+                        {isFirstEntry && (
+                          <td rowSpan={dayEntries.length} className="p-3 text-center font-bold text-lg align-top">
+                            {dayTotal.toFixed(1)}
+                          </td>
+                        )}
+                      </tr>
                     );
-                  })}
-                  <td></td>
+                  });
+                })}
+                
+                {/* Grand total row */}
+                <tr className="border-t-2 font-bold">
+                  <td colSpan={3} className="p-3 text-right">Total Hours:</td>
+                  <td className="p-3 text-center text-lg">
+                    {(totalHours || 0).toFixed(1)}
+                  </td>
                 </tr>
               </tbody>
             </table>

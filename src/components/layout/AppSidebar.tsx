@@ -96,7 +96,7 @@ export function AppSidebar() {
       fetchOrganization();
       fetchIsSuperadmin();
       
-      if (userRole && ['manager', 'hr', 'director', 'ceo'].includes(userRole)) {
+      if (userRole && ['manager', 'hr', 'director', 'ceo', 'admin'].includes(userRole)) {
         fetchPendingCounts();
         
         // Poll for updates every 30 seconds (replaces realtime)
@@ -159,6 +159,7 @@ export function AppSidebar() {
       case 'ceo':
       case 'director':
       case 'hr':
+      case 'admin':
         return hrItems;
       case 'manager':
         return managerItems;
@@ -188,37 +189,53 @@ export function AppSidebar() {
 
   return (
     <Sidebar>
-      <SidebarHeader className="border-b border-sidebar-border p-4">
-        <div className="flex items-center gap-2">
-          {organization?.logo_url ? (
-            <img 
-              src={organization.logo_url} 
-              alt={organization.name}
-              className="h-8 w-8 rounded-lg object-cover"
-            />
-          ) : (
-            <div className="h-8 w-8 rounded-lg bg-primary flex items-center justify-center">
-              <Building2 className="h-5 w-5 text-primary-foreground" />
-            </div>
-          )}
-          <div>
-            <h2 className="text-sm font-semibold text-sidebar-foreground">
+      <SidebarHeader className="border-b border-sidebar-border px-3 py-2.5">
+        <div className="flex items-center gap-2.5">
+          <div className="relative flex-shrink-0">
+            {organization?.logo_url ? (
+              <div className="relative h-10 w-10 rounded-lg overflow-hidden border border-sidebar-border shadow-sm bg-background">
+                <img 
+                  src={organization.logo_url} 
+                  alt={organization.name || 'Organization'}
+                  className="h-full w-full object-cover"
+                  onError={(e) => {
+                    // Fallback to default icon if image fails to load
+                    const target = e.target as HTMLImageElement;
+                    target.style.display = 'none';
+                    const parent = target.parentElement;
+                    if (parent && !parent.querySelector('.fallback-icon')) {
+                      const fallback = document.createElement('div');
+                      fallback.className = 'fallback-icon h-full w-full flex items-center justify-center bg-primary/10';
+                      fallback.innerHTML = '<svg class="h-5 w-5 text-primary" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" /></svg>';
+                      parent.appendChild(fallback);
+                    }
+                  }}
+                />
+              </div>
+            ) : (
+              <div className="h-10 w-10 rounded-lg bg-primary/10 border border-sidebar-border flex items-center justify-center shadow-sm">
+                <Building2 className="h-5 w-5 text-primary" />
+              </div>
+            )}
+          </div>
+          <div className="hidden lg:block min-w-0 flex-1">
+            <h2 className="text-sm font-semibold text-sidebar-foreground leading-tight truncate">
               {organization?.name || 'HR Platform'}
             </h2>
-            <p className="text-xs text-sidebar-foreground/60">Powered by AI</p>
+            <p className="text-[10px] text-sidebar-foreground/60 leading-tight mt-0.5">Powered by AI</p>
           </div>
         </div>
       </SidebarHeader>
       
       <SidebarContent>
         <SidebarGroup>
-          <SidebarGroupLabel>
-            {userRole === 'hr' || userRole === 'director' || userRole === 'ceo' 
-              ? 'HR Dashboard' 
-              : userRole === 'manager' 
-              ? 'Manager Dashboard' 
-              : 'My Dashboard'}
-          </SidebarGroupLabel>
+              <SidebarGroupLabel>
+                {userRole === 'hr' || userRole === 'director' || userRole === 'ceo' || userRole === 'admin'
+                  ? 'HR Dashboard' 
+                  : userRole === 'manager' 
+                  ? 'Manager Dashboard' 
+                  : 'My Dashboard'}
+              </SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
               {navigationItems && navigationItems.length > 0 ? (
@@ -233,10 +250,10 @@ export function AppSidebar() {
                             isActive ? "bg-sidebar-accent text-sidebar-accent-foreground" : ""
                           }
                         >
-                          <item.icon className="h-4 w-4" />
-                          <span className="flex-1">{item.title}</span>
+                          <item.icon className="h-3.5 w-3.5 shrink-0" />
+                          <span className="flex-1 text-xs hidden lg:block">{item.title}</span>
                           {badgeCount > 0 && (
-                            <span className="ml-auto flex h-5 w-5 items-center justify-center rounded-full bg-destructive text-[10px] font-medium text-destructive-foreground">
+                            <span className="ml-auto flex h-4 w-4 items-center justify-center rounded-full bg-destructive text-[9px] font-medium text-destructive-foreground shrink-0">
                               {badgeCount > 9 ? '9+' : badgeCount}
                             </span>
                           )}
