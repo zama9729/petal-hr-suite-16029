@@ -2,6 +2,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
@@ -36,6 +37,7 @@ const onboardingSchema = z.object({
   panNumber: z.string().trim().min(10, "Invalid PAN").max(10),
   aadharNumber: z.string().trim().min(12, "Invalid Aadhar").max(12),
   passportNumber: z.string().trim().optional(),
+  gender: z.enum(["male", "female", "other", "prefer_not_to_say"]).optional(),
 });
 
 export default function Onboarding() {
@@ -69,6 +71,7 @@ export default function Onboarding() {
     panNumber: "",
     aadharNumber: "",
     passportNumber: "",
+    gender: "" as "male" | "female" | "other" | "prefer_not_to_say" | "",
   });
 
   useEffect(() => {
@@ -140,6 +143,7 @@ export default function Onboarding() {
         panNumber: validated.panNumber,
         aadharNumber: validated.aadharNumber,
         passportNumber: validated.passportNumber || null,
+        gender: validated.gender || null,
       });
 
       toast({
@@ -202,6 +206,23 @@ export default function Onboarding() {
                       required
                     />
                   </div>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="gender">Gender</Label>
+                  <Select
+                    value={formData.gender}
+                    onValueChange={(value) => setFormData({ ...formData, gender: value as typeof formData.gender })}
+                  >
+                    <SelectTrigger id="gender">
+                      <SelectValue placeholder="Select gender (optional)" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="male">Male</SelectItem>
+                      <SelectItem value="female">Female</SelectItem>
+                      <SelectItem value="other">Other</SelectItem>
+                      <SelectItem value="prefer_not_to_say">Prefer not to say</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
                 <div className="space-y-4">
                   <div>

@@ -18,10 +18,21 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
 import { useEffect, useState } from "react";
 import { api } from "@/lib/api";
 import { useAuth } from "@/contexts/AuthContext";
+import { useToast } from "@/hooks/use-toast";
 import { ShiftAssignmentDialog } from "@/components/shifts/ShiftAssignmentDialog";
 
 interface Employee {
@@ -41,10 +52,14 @@ interface Employee {
 
 export default function Employees() {
   const { user, userRole } = useAuth();
+  const { toast } = useToast();
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [loading, setLoading] = useState(true);
   const [shiftDialogOpen, setShiftDialogOpen] = useState(false);
   const [selectedEmployee, setSelectedEmployee] = useState<{ id: string; name: string } | null>(null);
+  const [deactivateDialogOpen, setDeactivateDialogOpen] = useState(false);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [employeeToAction, setEmployeeToAction] = useState<Employee | null>(null);
 
   useEffect(() => {
     fetchEmployees();
@@ -98,6 +113,58 @@ export default function Employees() {
       case 'break': return 'text-yellow-500';
       case 'out_of_office': return 'text-blue-500';
       default: return 'text-gray-400';
+    }
+  };
+
+  const handleDeactivateClick = (employee: Employee) => {
+    setEmployeeToAction(employee);
+    setDeactivateDialogOpen(true);
+  };
+
+  const handleDeactivate = async () => {
+    if (!employeeToAction) return;
+
+    try {
+      await api.deactivateEmployee(employeeToAction.id);
+      toast({
+        title: "Success",
+        description: "Employee deactivated successfully",
+      });
+      setDeactivateDialogOpen(false);
+      setEmployeeToAction(null);
+      fetchEmployees();
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to deactivate employee",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleDeleteClick = (employee: Employee) => {
+    setEmployeeToAction(employee);
+    setDeleteDialogOpen(true);
+  };
+
+  const handleDelete = async () => {
+    if (!employeeToAction) return;
+
+    try {
+      await api.deleteEmployee(employeeToAction.id);
+      toast({
+        title: "Success",
+        description: "Employee deleted successfully",
+      });
+      setDeleteDialogOpen(false);
+      setEmployeeToAction(null);
+      fetchEmployees();
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to delete employee",
+        variant: "destructive",
+      });
     }
   };
 
@@ -271,7 +338,20 @@ export default function Employees() {
                                 </DropdownMenuItem>
                               )}
                               {isHROrAbove && (
-                                <DropdownMenuItem className="text-destructive">Deactivate</DropdownMenuItem>
+                                <>
+                                  <DropdownMenuItem 
+                                    onClick={() => handleDeactivateClick(employee)}
+                                    disabled={employee.status === 'inactive'}
+                                  >
+                                    {employee.status === 'inactive' ? 'Already Inactive' : 'Deactivate'}
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem 
+                                    onClick={() => handleDeleteClick(employee)}
+                                    className="text-destructive focus:text-destructive"
+                                  >
+                                    Delete
+                                  </DropdownMenuItem>
+                                </>
                               )}
                             </DropdownMenuContent>
                           </DropdownMenu>
@@ -295,6 +375,44 @@ export default function Employees() {
             onShiftAssigned={handleShiftAssigned}
           />
         )}
+
+        {/* Deactivate Confirmation Dialog */}
+        <AlertDialog open={deactivateDialogOpen} onOpenChange={setDeactivateDialogOpen}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Deactivate Employee</AlertDialogTitle>
+              <AlertDialogDescription>
+                Are you sure you want to deactivate {employeeToAction?.profiles?.first_name} {employeeToAction?.profiles?.last_name}?
+                This will prevent them from accessing the system. You can reactivate them later by updating their status.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancel</AlertDialogCancel>
+              <AlertDialogAction onClick={handleDeactivate} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+                Deactivate
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+
+        {/* Delete Confirmation Dialog */}
+        <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Delete Employee</AlertDialogTitle>
+              <AlertDialogDescription>
+                Are you sure you want to permanently delete {employeeToAction?.profiles?.first_name} {employeeToAction?.profiles?.last_name}?
+                This action cannot be undone. All employee data including profile, roles, and related records will be permanently deleted.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancel</AlertDialogCancel>
+              <AlertDialogAction onClick={handleDelete} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+                Delete
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </div>
     </AppLayout>
   );

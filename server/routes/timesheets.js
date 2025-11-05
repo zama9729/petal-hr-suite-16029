@@ -599,9 +599,8 @@ router.post('/:id/approve', authenticateToken, async (req, res) => {
 
     // Get current user's employee ID and role
     const empResult = await query(
-      `SELECT e.id, ur.role
+      `SELECT e.id
        FROM employees e
-       LEFT JOIN user_roles ur ON ur.user_id = e.user_id
        WHERE e.user_id = $1`,
       [req.user.id]
     );
@@ -610,7 +609,29 @@ router.post('/:id/approve', authenticateToken, async (req, res) => {
       return res.status(404).json({ error: 'Employee not found' });
     }
 
-    const { id: reviewerId, role } = empResult.rows[0];
+    const reviewerId = empResult.rows[0].id;
+
+    // Get user's highest role
+    const roleResult = await query(
+      `SELECT role FROM user_roles
+       WHERE user_id = $1
+       ORDER BY CASE role
+         WHEN 'admin' THEN 0
+         WHEN 'ceo' THEN 1
+         WHEN 'director' THEN 2
+         WHEN 'hr' THEN 3
+         WHEN 'manager' THEN 4
+         WHEN 'employee' THEN 5
+       END
+       LIMIT 1`,
+      [req.user.id]
+    );
+
+    if (roleResult.rows.length === 0) {
+      return res.status(403).json({ error: 'User role not found' });
+    }
+
+    const role = roleResult.rows[0].role;
 
     // Check if user has permission
     if (!['manager', 'hr', 'director', 'ceo', 'admin'].includes(role)) {

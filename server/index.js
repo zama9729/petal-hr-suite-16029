@@ -16,6 +16,7 @@ import leavePoliciesRoutes from './routes/leave-policies.js';
 import leaveRequestsRoutes from './routes/leave-requests.js';
 import appraisalCycleRoutes from './routes/appraisal-cycles.js';
 import performanceReviewRoutes from './routes/performance-reviews.js';
+import promotionsRoutes from './routes/promotions.js';
 import { authenticateToken } from './middleware/auth.js';
 import shiftsRoutes from './routes/shifts.js';
 import workflowsRoutes from './routes/workflows.js';
@@ -32,8 +33,15 @@ import importsRoutes from './routes/imports.js';
 import checkInOutRoutes from './routes/check-in-out.js';
 import opalMiniAppsRoutes from './routes/opal-mini-apps.js';
 import attendanceRoutes from './routes/attendance.js';
+import payrollRoutes from './routes/payroll.js';
+import backgroundChecksRoutes from './routes/background-checks.js';
+import terminationsRoutes from './routes/terminations.js';
+import documentsRoutes from './routes/documents.js';
+import offboardingRoutes from './routes/offboarding.js';
+import rehireRoutes from './routes/rehire.js';
 import { setTenantContext } from './middleware/tenant.js';
-import { scheduleHolidayNotifications } from './services/cron.js';
+import { scheduleHolidayNotifications, scheduleNotificationRules } from './services/cron.js';
+import { scheduleOffboardingJobs } from './services/offboarding-cron.js';
 import { createAttendanceTables } from './utils/createAttendanceTables.js';
 import { ensureAdminRole } from './utils/runMigration.js';
 import { ensureOnboardingColumns } from './utils/ensureOnboardingColumns.js';
@@ -80,6 +88,7 @@ app.use('/api/onboarding', onboardingRoutes);
 app.use('/api/onboarding-tracker', onboardingTrackerRoutes);
 app.use('/api/appraisal-cycles', appraisalCycleRoutes);
 app.use('/api/performance-reviews', performanceReviewRoutes);
+app.use('/api/promotions', promotionsRoutes);
 // Additional feature routes
 app.use('/api/ai', aiRoutes);
 app.use('/api', importsRoutes);
@@ -94,6 +103,12 @@ app.use('/api/migrations', migrationsRoutes);
 app.use('/api/check-in-out', checkInOutRoutes);
 app.use('/api/v1/attendance', attendanceRoutes);
 app.use('/api/opal-mini-apps', authenticateToken, setTenantContext, opalMiniAppsRoutes);
+app.use('/api/payroll', authenticateToken, payrollRoutes);
+app.use('/api/background-checks', authenticateToken, backgroundChecksRoutes);
+app.use('/api/terminations', authenticateToken, terminationsRoutes);
+app.use('/api/documents', authenticateToken, documentsRoutes);
+app.use('/api/offboarding', authenticateToken, offboardingRoutes);
+app.use('/api/rehire', authenticateToken, rehireRoutes);
 
 // Public discovery endpoint for AI tools (requires API key in header)
 app.get('/discovery', (req, res, next) => {
@@ -226,6 +241,12 @@ createPool().then(async () => {
     console.error('Unhandled error:', err);
     res.status(500).json({ error: err.message || 'Internal server error' });
   });
+
+  // Schedule cron jobs
+  scheduleHolidayNotifications();
+  scheduleNotificationRules();
+  await scheduleOffboardingJobs();
+  console.log('✅ Cron jobs scheduled');
 
   app.listen(PORT, () => {
     console.log(`🚀 Server running on http://localhost:${PORT}`);

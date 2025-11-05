@@ -44,6 +44,14 @@ import MyProfile from "./pages/MyProfile";
 import ProjectCalendar from "./pages/ProjectCalendar";
 import HolidayManagement from "./pages/HolidayManagement";
 import EmployeeStats from "./pages/EmployeeStats";
+import Payroll from "./pages/Payroll";
+import BackgroundChecks from "./pages/BackgroundChecks";
+import Terminations from "./pages/Terminations";
+import DocumentInbox from "./pages/DocumentInbox";
+import OffboardingNew from "./pages/OffboardingNew";
+import OffboardingQueue from "./pages/OffboardingQueue";
+import OffboardingDetail from "./pages/OffboardingDetail";
+import OffboardingPolicies from "./pages/OffboardingPolicies";
 
 const queryClient = new QueryClient();
 
@@ -98,8 +106,16 @@ const App = () => (
             <Route path="/my-appraisal" element={<ProtectedRoute><MyAppraisal /></ProtectedRoute>} />
             <Route path="/shifts" element={<ProtectedRoute allowedRoles={['hr', 'director', 'ceo', 'admin']}><ShiftManagement /></ProtectedRoute>} />
             <Route path="/ai-assistant" element={<ProtectedRoute><AIAssistantPage /></ProtectedRoute>} />
-            <Route path="/attendance/upload" element={<ProtectedRoute allowedRoles={['hr', 'director', 'ceo', 'admin']}><AttendanceUpload /></ProtectedRoute>} />
-            <Route path="/attendance/history" element={<ProtectedRoute allowedRoles={['hr', 'director', 'ceo', 'admin']}><AttendanceUploadHistory /></ProtectedRoute>} />
+            <Route path="/attendance/upload" element={<ProtectedRoute allowedRoles={['hr', 'director', 'ceo', 'admin', 'accountant']}><AttendanceUpload /></ProtectedRoute>} />
+            <Route path="/attendance/history" element={<ProtectedRoute allowedRoles={['hr', 'director', 'ceo', 'admin', 'accountant']}><AttendanceUploadHistory /></ProtectedRoute>} />
+            <Route path="/payroll" element={<ProtectedRoute allowedRoles={['accountant', 'ceo', 'admin']}><Payroll /></ProtectedRoute>} />
+            <Route path="/background-checks" element={<ProtectedRoute allowedRoles={['hr', 'director', 'ceo', 'admin']}><BackgroundChecks /></ProtectedRoute>} />
+            <Route path="/terminations" element={<ProtectedRoute allowedRoles={['hr', 'director', 'ceo', 'admin']}><Terminations /></ProtectedRoute>} />
+            <Route path="/documents" element={<ProtectedRoute><DocumentInbox /></ProtectedRoute>} />
+            <Route path="/offboarding/new" element={<ProtectedRoute><OffboardingNew /></ProtectedRoute>} />
+            <Route path="/offboarding/policies" element={<ProtectedRoute allowedRoles={['hr', 'admin']}><OffboardingPolicies /></ProtectedRoute>} />
+            <Route path="/offboarding" element={<ProtectedRoute allowedRoles={['hr', 'director', 'ceo', 'admin', 'manager']}><OffboardingQueue /></ProtectedRoute>} />
+            <Route path="/offboarding/:id" element={<ProtectedRoute><OffboardingDetail /></ProtectedRoute>} />
             
             {/* Redirects */}
             <Route path="/" element={<Navigate to="/dashboard" />} />

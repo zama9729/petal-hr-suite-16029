@@ -51,6 +51,15 @@ router.post("/", authenticateToken, async (req, res) => {
         strengths=$7, areas_of_improvement=$8, goals=$9, comments=$10, status='submitted', updated_at=now()`,
       [appraisal_cycle_id, employee_id, reviewer_id, tenant_id, rating, performance_score, strengths, areas_of_improvement, goals, comments]
     );
+    
+    // Check for promotion based on performance
+    if (performance_score && performance_score >= 4.0) {
+      await query(
+        `SELECT check_performance_promotion($1, $2, $3)`,
+        [employee_id, performance_score, tenant_id]
+      );
+    }
+    
     res.json({ success: true });
   } catch (error) {
     res.status(500).json({ error: error?.message || "Failed to upsert" });

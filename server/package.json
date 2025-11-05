@@ -6,7 +6,10 @@
   "type": "module",
   "scripts": {
     "dev": "node --watch index.js",
-    "start": "node index.js"
+    "start": "node index.js",
+    "test": "node server/tests/permissions.test.js && node server/tests/routes.test.js",
+    "test:permissions": "node server/tests/permissions.test.js",
+    "test:routes": "node server/tests/routes.test.js"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",

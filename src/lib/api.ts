@@ -132,9 +132,34 @@ class ApiClient {
     return this.request(`/api/employees/${id}`);
   }
 
+  async deactivateEmployee(id: string) {
+    return this.request(`/api/employees/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ status: 'inactive' }),
+    });
+  }
+
+  async deleteEmployee(id: string) {
+    return this.request(`/api/employees/${id}`, {
+      method: 'DELETE',
+    });
+  }
+
   // Profile methods
   async getProfile() {
     return this.request('/api/profiles/me');
+  }
+
+  async updateProfile(data: {
+    firstName?: string;
+    lastName?: string;
+    email?: string;
+    phone?: string;
+  }) {
+    return this.request('/api/profiles/me', {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    });
   }
 
   // Organization methods
@@ -544,6 +569,254 @@ class ApiClient {
   async cancelUpload(uploadId: string) {
     return this.request(`/api/v1/attendance/upload/${uploadId}/cancel`, {
       method: 'POST',
+    });
+  }
+
+  // Termination methods
+  async getTerminations() {
+    return this.request('/api/terminations');
+  }
+
+  async createTermination(data: {
+    employee_id: string;
+    termination_date: string;
+    termination_type: string;
+    reason?: string;
+    notes?: string;
+  }) {
+    return this.request('/api/terminations', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async approveTermination(id: string, notes?: string) {
+    return this.request(`/api/terminations/${id}/approve`, {
+      method: 'POST',
+      body: JSON.stringify({ notes }),
+    });
+  }
+
+  async updateTermination(id: string, data: {
+    termination_date?: string;
+    termination_type?: string;
+    reason?: string;
+    notes?: string;
+  }) {
+    return this.request(`/api/terminations/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async deleteTermination(id: string) {
+    return this.request(`/api/terminations/${id}`, {
+      method: 'DELETE',
+    });
+  }
+
+  // Rehire methods
+  async getRehires() {
+    return this.request('/api/terminations/rehires');
+  }
+
+  async createRehire(data: {
+    original_employee_id?: string;
+    new_employee_id: string;
+    rehire_date: string;
+    reason?: string;
+    previous_termination_id?: string;
+  }) {
+    return this.request('/api/terminations/rehire', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async updateRehire(id: string, data: {
+    rehire_date?: string;
+    reason?: string;
+  }) {
+    return this.request(`/api/terminations/rehires/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async deleteRehire(id: string) {
+    return this.request(`/api/terminations/rehires/${id}`, {
+      method: 'DELETE',
+    });
+  }
+
+  // Offboarding methods
+  async getOffboardingPolicies() {
+    return this.request('/api/offboarding/policies');
+  }
+
+  async createOffboardingPolicy(data: {
+    name: string;
+    description?: string;
+    notice_period_days: number;
+    auto_approve_days?: number;
+    use_ceo_approval?: boolean;
+    applies_to_department?: string;
+    applies_to_location?: string;
+    is_default?: boolean;
+  }) {
+    return this.request('/api/offboarding/policies', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async updateOffboardingPolicy(id: string, data: any) {
+    return this.request(`/api/offboarding/policies/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async deleteOffboardingPolicy(id: string) {
+    return this.request(`/api/offboarding/policies/${id}`, {
+      method: 'DELETE',
+    });
+  }
+
+  async getMaskedVerification() {
+    return this.request('/api/offboarding/verify/masked');
+  }
+
+  async sendVerificationOTP(type: 'email' | 'phone') {
+    return this.request('/api/offboarding/verify/send', {
+      method: 'POST',
+      body: JSON.stringify({ type }),
+    });
+  }
+
+  async confirmVerification(type: 'email' | 'phone', otp: string) {
+    return this.request('/api/offboarding/verify/confirm', {
+      method: 'POST',
+      body: JSON.stringify({ type, otp }),
+    });
+  }
+
+  async confirmAddress(data: {
+    confirmed: boolean;
+    address_line1?: string;
+    address_line2?: string;
+    city?: string;
+    state?: string;
+    postal_code?: string;
+    country?: string;
+  }) {
+    return this.request('/api/offboarding/verify/address', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async submitOffboardingSurvey(data: {
+    survey_json: any;
+    reason: string;
+  }) {
+    return this.request('/api/offboarding/survey', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async getOffboardingRequests() {
+    return this.request('/api/offboarding');
+  }
+
+  async getOffboardingRequest(id: string) {
+    return this.request(`/api/offboarding/${id}`);
+  }
+
+  async approveOffboarding(id: string, comment?: string) {
+    return this.request(`/api/offboarding/${id}/approve`, {
+      method: 'POST',
+      body: JSON.stringify({ comment }),
+    });
+  }
+
+  async denyOffboarding(id: string, comment: string) {
+    return this.request(`/api/offboarding/${id}/deny`, {
+      method: 'POST',
+      body: JSON.stringify({ comment }),
+    });
+  }
+
+  async updateChecklist(id: string, data: {
+    leaves_remaining?: number;
+    financials_due?: number;
+    assets_pending?: number;
+    compliance_clear?: boolean;
+    finance_clear?: boolean;
+    it_clear?: boolean;
+    notes?: string;
+  }) {
+    return this.request(`/api/offboarding/${id}/checklist`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async generateLetter(id: string) {
+    return this.request(`/api/offboarding/${id}/generate-letter`, {
+      method: 'POST',
+    });
+  }
+
+  async finalizeOffboarding(id: string) {
+    return this.request(`/api/offboarding/${id}/finalize`, {
+      method: 'POST',
+    });
+  }
+
+  // Rehire methods
+  async searchOffboardedIdentities(data: { email?: string; emp_code?: string }) {
+    return this.request('/api/rehire/search', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async createRehireRequest(data: {
+    offboarded_identity_id: string;
+    manager_id?: string;
+    department?: string;
+    position?: string;
+    email: string;
+    first_name: string;
+    last_name: string;
+  }) {
+    return this.request('/api/rehire/request', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async getRehireRequests() {
+    return this.request('/api/rehire');
+  }
+
+  async getRehireRequest(id: string) {
+    return this.request(`/api/rehire/${id}`);
+  }
+
+  async approveRehire(id: string, comment?: string) {
+    return this.request(`/api/rehire/${id}/approve`, {
+      method: 'POST',
+      body: JSON.stringify({ comment }),
+    });
+  }
+
+  async denyRehire(id: string, comment: string) {
+    return this.request(`/api/rehire/${id}/deny`, {
+      method: 'POST',
+      body: JSON.stringify({ comment }),
     });
   }
 }

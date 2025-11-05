@@ -18,21 +18,85 @@ router.get('/pending-counts', authenticateToken, async (req, res) => {
       return res.json({ timesheets: 0, leaves: 0 });
     }
 
-    // Count pending timesheets
-    const timesheetResult = await query(
-      'SELECT COUNT(*) as count FROM timesheets WHERE status = $1 AND tenant_id = $2',
-      ['pending', tenantId]
+    // Get user's role
+    const roleResult = await query(
+      `SELECT role FROM user_roles WHERE user_id = $1
+       ORDER BY CASE role
+         WHEN 'admin' THEN 0
+         WHEN 'ceo' THEN 1
+         WHEN 'director' THEN 2
+         WHEN 'hr' THEN 3
+         WHEN 'manager' THEN 4
+         WHEN 'employee' THEN 5
+       END
+       LIMIT 1`,
+      [req.user.id]
     );
+    let role = roleResult.rows[0]?.role;
 
-    // Count pending leave requests
-    const leaveResult = await query(
-      'SELECT COUNT(*) as count FROM leave_requests WHERE status = $1 AND tenant_id = $2',
-      ['pending', tenantId]
+    // Get employee ID
+    const empResult = await query(
+      'SELECT id FROM employees WHERE user_id = $1',
+      [req.user.id]
     );
+    const employeeId = empResult.rows[0]?.id;
+
+    // Check if user has direct reports and should be treated as manager
+    if (employeeId) {
+      const hasDirectReports = await query(
+        `SELECT COUNT(*) as count FROM employees 
+         WHERE reporting_manager_id = $1`,
+        [employeeId]
+      );
+      const directReportsCount = parseInt(hasDirectReports.rows[0]?.count || '0');
+      
+      if (directReportsCount > 0 && !['admin', 'ceo', 'director', 'hr', 'manager'].includes(role)) {
+        role = 'manager';
+      }
+    }
+
+    let timesheetsCount = 0;
+    let leavesCount = 0;
+
+    if (['manager', 'hr', 'director', 'ceo', 'admin'].includes(role)) {
+      // For managers, count only their team's pending requests
+      if (role === 'manager' && employeeId) {
+        // Count pending timesheets for manager's team
+        const timesheetResult = await query(
+          `SELECT COUNT(*) as count FROM timesheets t
+           JOIN employees e ON e.id = t.employee_id
+           WHERE t.status = 'pending' AND t.tenant_id = $1 AND e.reporting_manager_id = $2`,
+          [tenantId, employeeId]
+        );
+        timesheetsCount = parseInt(timesheetResult.rows[0]?.count || '0');
+
+        // Count pending leave requests for manager's team
+        const leaveResult = await query(
+          `SELECT COUNT(*) as count FROM leave_requests lr
+           JOIN employees e ON e.id = lr.employee_id
+           WHERE lr.status = 'pending' AND lr.tenant_id = $1 AND e.reporting_manager_id = $2`,
+          [tenantId, employeeId]
+        );
+        leavesCount = parseInt(leaveResult.rows[0]?.count || '0');
+      } else {
+        // For HR/CEO/Admin, count all pending requests
+        const timesheetResult = await query(
+          'SELECT COUNT(*) as count FROM timesheets WHERE status = $1 AND tenant_id = $2',
+          ['pending', tenantId]
+        );
+        timesheetsCount = parseInt(timesheetResult.rows[0]?.count || '0');
+
+        const leaveResult = await query(
+          'SELECT COUNT(*) as count FROM leave_requests WHERE status = $1 AND tenant_id = $2',
+          ['pending', tenantId]
+        );
+        leavesCount = parseInt(leaveResult.rows[0]?.count || '0');
+      }
+    }
 
     res.json({
-      timesheets: parseInt(timesheetResult.rows[0]?.count || '0'),
-      leaves: parseInt(leaveResult.rows[0]?.count || '0'),
+      timesheets: timesheetsCount,
+      leaves: leavesCount,
     });
   } catch (error) {
     console.error('Error fetching pending counts:', error);

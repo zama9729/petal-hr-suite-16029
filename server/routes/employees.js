@@ -512,6 +512,68 @@ router.patch('/:id', authenticateToken, async (req, res) => {
 
       await query('COMMIT');
 
+      // Check for auto-promotion if reporting_manager_id was updated
+      if (reportingManagerId !== undefined) {
+        // The trigger will handle auto-promotion automatically
+        // But we can also manually check if needed by counting direct reports
+        const managerCheckResult = await query(
+          `SELECT COUNT(*) as count FROM employees 
+           WHERE reporting_manager_id = $1 AND status = 'active'`,
+          [reportingManagerId]
+        );
+        
+        if (managerCheckResult.rows[0]?.count >= 2) {
+          const managerEmpResult = await query(
+            'SELECT user_id, tenant_id FROM employees WHERE id = $1',
+            [reportingManagerId]
+          );
+          if (managerEmpResult.rows.length > 0) {
+            const { user_id, tenant_id } = managerEmpResult.rows[0];
+            // Check if already has manager role or higher
+            const roleCheck = await query(
+              `SELECT 1 FROM user_roles WHERE user_id = $1 AND role IN ('manager', 'hr', 'director', 'ceo', 'admin')`,
+              [user_id]
+            );
+            if (roleCheck.rows.length === 0) {
+              // Promote to manager
+              await query(
+                'INSERT INTO user_roles (user_id, role, tenant_id) VALUES ($1, $2, $3) ON CONFLICT (user_id, role) DO NOTHING',
+                [user_id, 'manager', tenant_id]
+              );
+            }
+          }
+        }
+      }
+      
+      // Also check if this employee should be promoted (if they now have 2+ reports)
+      const directReportsResult = await query(
+        `SELECT COUNT(*) as count FROM employees 
+         WHERE reporting_manager_id = $1 AND status = 'active'`,
+        [id]
+      );
+      
+      if (directReportsResult.rows[0]?.count >= 2) {
+        const empCheck = await query(
+          'SELECT user_id, tenant_id FROM employees WHERE id = $1',
+          [id]
+        );
+        if (empCheck.rows.length > 0) {
+          const { user_id, tenant_id } = empCheck.rows[0];
+          // Check if already has manager role
+          const roleCheck = await query(
+            `SELECT 1 FROM user_roles WHERE user_id = $1 AND role IN ('manager', 'hr', 'director', 'ceo', 'admin')`,
+            [user_id]
+          );
+          if (roleCheck.rows.length === 0) {
+            // Promote to manager
+            await query(
+              'INSERT INTO user_roles (user_id, role, tenant_id) VALUES ($1, $2, $3) ON CONFLICT (user_id, role) DO NOTHING',
+              [user_id, 'manager', tenant_id]
+            );
+          }
+        }
+      }
+
       // Fetch updated employee
       const updatedResult = await query(
         `SELECT 
@@ -803,6 +865,87 @@ router.post('/import', authenticateToken, requireRole('hr', 'director', 'ceo', '
     imported,
     errors 
   });
+});
+
+// Delete employee (HR/CEO/Director/Admin only)
+router.delete('/:id', authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    // Check role - only HR/CEO/Director/Admin can delete
+    const roleResult = await query(
+      `SELECT role FROM user_roles
+       WHERE user_id = $1
+       ORDER BY CASE role
+         WHEN 'admin' THEN 0
+         WHEN 'ceo' THEN 1
+         WHEN 'director' THEN 2
+         WHEN 'hr' THEN 3
+         WHEN 'manager' THEN 4
+         WHEN 'employee' THEN 5
+       END
+       LIMIT 1`,
+      [req.user.id]
+    );
+    const userRole = roleResult.rows[0]?.role;
+    
+    if (!userRole || !['hr', 'director', 'ceo', 'admin'].includes(userRole)) {
+      return res.status(403).json({ error: 'Insufficient permissions' });
+    }
+
+    // Get user's tenant_id
+    const tenantResult = await query(
+      'SELECT tenant_id FROM profiles WHERE id = $1',
+      [req.user.id]
+    );
+    const tenantId = tenantResult.rows[0]?.tenant_id;
+
+    if (!tenantId) {
+      return res.status(403).json({ error: 'No organization found' });
+    }
+
+    // Verify employee belongs to same tenant
+    const empCheck = await query(
+      'SELECT tenant_id, user_id FROM employees WHERE id = $1',
+      [id]
+    );
+
+    if (empCheck.rows.length === 0) {
+      return res.status(404).json({ error: 'Employee not found' });
+    }
+
+    if (empCheck.rows[0].tenant_id !== tenantId) {
+      return res.status(403).json({ error: 'Unauthorized' });
+    }
+
+    const userId = empCheck.rows[0].user_id;
+
+    await query('BEGIN');
+
+    try {
+      // Delete employee record (this will cascade to onboarding_data due to FK)
+      await query('DELETE FROM employees WHERE id = $1', [id]);
+
+      // Delete user roles
+      await query('DELETE FROM user_roles WHERE user_id = $1', [userId]);
+
+      // Delete user auth
+      await query('DELETE FROM user_auth WHERE user_id = $1', [userId]);
+
+      // Delete profile (this will cascade to other related records)
+      await query('DELETE FROM profiles WHERE id = $1', [userId]);
+
+      await query('COMMIT');
+
+      res.json({ success: true, message: 'Employee deleted successfully' });
+    } catch (error) {
+      await query('ROLLBACK');
+      throw error;
+    }
+  } catch (error) {
+    console.error('Error deleting employee:', error);
+    res.status(500).json({ error: error.message || 'Failed to delete employee' });
+  }
 });
 
 export default router;

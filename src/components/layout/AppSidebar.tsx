@@ -16,6 +16,12 @@ import {
   CheckSquare,
   Upload,
   History,
+  DollarSign,
+  Search,
+  UserX,
+  Inbox,
+  LogOut,
+  ClipboardList,
 } from "lucide-react";
 import { NavLink } from "react-router-dom";
 import {
@@ -39,6 +45,9 @@ const hrItems = [
   { title: "My Profile", url: "/my/profile", icon: Users, showBadge: false },
   { title: "Employees", url: "/employees", icon: Users, showBadge: false },
   { title: "Onboarding", url: "/onboarding-tracker", icon: UserCheck, showBadge: false },
+  { title: "Offboarding", url: "/offboarding", icon: LogOut, showBadge: false },
+  { title: "Background Checks", url: "/background-checks", icon: Search, showBadge: false },
+  { title: "Terminations & Rehires", url: "/terminations", icon: UserX, showBadge: false },
   { title: "Org Chart", url: "/org-chart", icon: Network, showBadge: false },
   { title: "Timesheets", url: "/timesheets", icon: Clock, showBadge: false },
   { title: "Timesheet Approvals", url: "/timesheet-approvals", icon: CheckSquare, showBadge: true },
@@ -52,7 +61,8 @@ const hrItems = [
   { title: "CEO Dashboard", url: "/ceo/dashboard", icon: BarChart3, showBadge: false },
   { title: "Project Calendar", url: "/calendar", icon: CalendarClock, showBadge: false },
   { title: "Holiday Management", url: "/holidays", icon: Calendar, showBadge: false },
-  { title: "Policies", url: "/policies", icon: FileText, showBadge: false },
+  { title: "Leave Policies", url: "/policies", icon: FileText, showBadge: false },
+  { title: "Offboarding Policies", url: "/offboarding/policies", icon: ClipboardList, showBadge: false },
   { title: "Analytics", url: "/analytics", icon: BarChart3, showBadge: false },
   { title: "Employee Stats", url: "/employee-stats", icon: Users, showBadge: false },
   { title: "AI Assistant", url: "/ai-assistant", icon: Bot, showBadge: false },
@@ -62,6 +72,7 @@ const managerItems = [
   { title: "Dashboard", url: "/dashboard", icon: LayoutDashboard, showBadge: false },
   { title: "My Profile", url: "/my/profile", icon: Users, showBadge: false },
   { title: "My Team", url: "/employees", icon: Users, showBadge: false },
+  { title: "Offboarding", url: "/offboarding", icon: LogOut, showBadge: false },
   { title: "Org Chart", url: "/org-chart", icon: Network, showBadge: false },
   { title: "Timesheets", url: "/timesheets", icon: Clock, showBadge: false },
   { title: "Timesheet Approvals", url: "/timesheet-approvals", icon: CheckSquare, showBadge: true },
@@ -76,6 +87,8 @@ const employeeItems = [
   { title: "My Profile", url: "/my/profile", icon: Users, showBadge: false },
   { title: "My Timesheets", url: "/timesheets", icon: Clock, showBadge: false },
   { title: "Leave Requests", url: "/leaves", icon: Calendar, showBadge: false },
+  { title: "Request Resignation", url: "/offboarding/new", icon: LogOut, showBadge: false },
+  { title: "Documents", url: "/documents", icon: Inbox, showBadge: false },
   { title: "Project Calendar", url: "/calendar", icon: CalendarClock, showBadge: false },
   { title: "Org Chart", url: "/org-chart", icon: Network, showBadge: false },
   { title: "My Appraisal", url: "/my-appraisal", icon: Award, showBadge: false },
@@ -163,6 +176,13 @@ export function AppSidebar() {
         return hrItems;
       case 'manager':
         return managerItems;
+      case 'accountant':
+        return [
+          { title: "Dashboard", url: "/dashboard", icon: LayoutDashboard, showBadge: false },
+          { title: "Payroll", url: "/payroll", icon: DollarSign, showBadge: false },
+          { title: "Attendance Upload", url: "/attendance/upload", icon: Upload, showBadge: false },
+          { title: "Upload History", url: "/attendance/history", icon: History, showBadge: false },
+        ];
       case 'employee':
       default:
         return employeeItems;

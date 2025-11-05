@@ -54,10 +54,30 @@ async function checkManagerHierarchy(employeeId) {
 }
 
 async function getThresholds(tenantId) {
-  const res = await query('SELECT leave_days_hr_threshold, expense_amount_hr_threshold FROM hr_approval_thresholds WHERE tenant_id = $1', [tenantId]);
-  const row = res.rows[0] || {};
-  const leaveDays = row.leave_days_hr_threshold ?? parseInt(process.env.LEAVE_DAYS_HR_THRESHOLD || '10', 10);
-  const expenseAmount = row.expense_amount_hr_threshold ?? parseFloat(process.env.EXPENSE_AMOUNT_HR_THRESHOLD || '10000');
+  try {
+    // Check if table exists first
+    const tableCheck = await query(`
+      SELECT EXISTS (
+        SELECT 1 FROM information_schema.tables 
+        WHERE table_name = 'hr_approval_thresholds'
+      )
+    `);
+    
+    if (tableCheck.rows[0]?.exists) {
+      const res = await query('SELECT leave_days_hr_threshold, expense_amount_hr_threshold FROM hr_approval_thresholds WHERE tenant_id = $1', [tenantId]);
+      const row = res.rows[0] || {};
+      const leaveDays = row.leave_days_hr_threshold ?? parseInt(process.env.LEAVE_DAYS_HR_THRESHOLD || '10', 10);
+      const expenseAmount = row.expense_amount_hr_threshold ?? parseFloat(process.env.EXPENSE_AMOUNT_HR_THRESHOLD || '10000');
+      return { leaveDays, expenseAmount };
+    }
+  } catch (error) {
+    // Table doesn't exist or query failed, fall back to environment variables
+    console.warn('hr_approval_thresholds table not found, using environment variables:', error.message);
+  }
+  
+  // Fallback to environment variables
+  const leaveDays = parseInt(process.env.LEAVE_DAYS_HR_THRESHOLD || '10', 10);
+  const expenseAmount = parseFloat(process.env.EXPENSE_AMOUNT_HR_THRESHOLD || '10000');
   return { leaveDays, expenseAmount };
 }
 

@@ -22,21 +22,45 @@ router.get('/', authenticateToken, async (req, res) => {
 
     const tenantId = tenantResult.rows[0].tenant_id;
 
-    // Get user's role
-    const roleResult = await query(
-      'SELECT role FROM user_roles WHERE user_id = $1',
-      [user.id]
-    );
-
-    const role = roleResult.rows[0]?.role;
-
-    // Get employee ID if exists
+    // Get employee ID if exists (needed for role check)
     const empResult = await query(
       'SELECT id FROM employees WHERE user_id = $1',
       [user.id]
     );
 
     const employeeId = empResult.rows[0]?.id;
+
+    // Get user's role (highest priority)
+    const roleResult = await query(
+      `SELECT role FROM user_roles WHERE user_id = $1
+       ORDER BY CASE role
+         WHEN 'admin' THEN 0
+         WHEN 'ceo' THEN 1
+         WHEN 'director' THEN 2
+         WHEN 'hr' THEN 3
+         WHEN 'manager' THEN 4
+         WHEN 'employee' THEN 5
+       END
+       LIMIT 1`,
+      [user.id]
+    );
+
+    let role = roleResult.rows[0]?.role;
+
+    // Check if user has direct reports and should be treated as manager
+    if (employeeId) {
+      const hasDirectReports = await query(
+        `SELECT COUNT(*) as count FROM employees 
+         WHERE reporting_manager_id = $1`,
+        [employeeId]
+      );
+      const directReportsCount = parseInt(hasDirectReports.rows[0]?.count || '0');
+      
+      // If user has direct reports but doesn't have manager role, treat them as manager for this query
+      if (directReportsCount > 0 && !['admin', 'ceo', 'director', 'hr', 'manager'].includes(role)) {
+        role = 'manager';
+      }
+    }
 
     let myRequests = [];
     let teamRequests = [];
@@ -378,15 +402,34 @@ router.patch('/:id/approve', authenticateToken, async (req, res) => {
       // Check if CEO/HR can approve this (no manager or manager has no manager)
       const canDirectlyApprove = !leave.reporting_manager_id || !leave.manager_manager_id;
       
-      // Get reviewer role
+      // Get reviewer role (highest role)
       const reviewerRoleResult = await query(
-        `SELECT ur.role FROM user_roles ur WHERE ur.user_id = $1 AND ur.role IN ('ceo', 'hr', 'director')`,
+        `SELECT role FROM user_roles
+         WHERE user_id = $1
+         ORDER BY CASE role
+           WHEN 'admin' THEN 0
+           WHEN 'ceo' THEN 1
+           WHEN 'director' THEN 2
+           WHEN 'hr' THEN 3
+           WHEN 'manager' THEN 4
+           WHEN 'employee' THEN 5
+         END
+         LIMIT 1`,
         [req.user.id]
       );
       
       const reviewerRole = reviewerRoleResult.rows[0]?.role;
       
-      if (canDirectlyApprove && ['ceo', 'hr', 'director'].includes(reviewerRole)) {
+      if (!reviewerRole) {
+        return res.status(403).json({ error: 'User role not found' });
+      }
+      
+      // Check if manager is approving their direct report
+      const isManagerApprovingDirectReport = reviewerRole === 'manager' && 
+        leave.reporting_manager_id === reviewerId;
+      
+      if ((canDirectlyApprove && ['ceo', 'hr', 'director', 'admin'].includes(reviewerRole)) || 
+          isManagerApprovingDirectReport) {
         // Directly approve without workflow
         await query(
           `UPDATE leave_requests SET status = 'approved', reviewed_by = $1, reviewed_at = now() WHERE id = $2`,
@@ -414,7 +457,10 @@ router.patch('/:id/approve', authenticateToken, async (req, res) => {
         } catch (createError) {
           console.error('Error creating approval workflow:', createError);
           // If creation fails, still try direct approval if allowed
-          if (canDirectlyApprove && ['ceo', 'hr', 'director'].includes(reviewerRole)) {
+          const isManagerApprovingDirectReport2 = reviewerRole === 'manager' && 
+            leave.reporting_manager_id === reviewerId;
+          if ((canDirectlyApprove && ['ceo', 'hr', 'director', 'admin'].includes(reviewerRole)) || 
+              isManagerApprovingDirectReport2) {
             await query(
               `UPDATE leave_requests SET status = 'approved', reviewed_by = $1, reviewed_at = now() WHERE id = $2`,
               [reviewerId, id]
@@ -427,6 +473,44 @@ router.patch('/:id/approve', authenticateToken, async (req, res) => {
       }
     } else {
       // Approval workflow exists, use it
+      // Get reviewer role to verify permissions
+      const reviewerRoleResult = await query(
+        `SELECT role FROM user_roles
+         WHERE user_id = $1
+         ORDER BY CASE role
+           WHEN 'admin' THEN 0
+           WHEN 'ceo' THEN 1
+           WHEN 'director' THEN 2
+           WHEN 'hr' THEN 3
+           WHEN 'manager' THEN 4
+           WHEN 'employee' THEN 5
+         END
+         LIMIT 1`,
+        [req.user.id]
+      );
+
+      const reviewerRole = reviewerRoleResult.rows[0]?.role;
+      
+      if (!reviewerRole || !['manager', 'hr', 'director', 'ceo', 'admin'].includes(reviewerRole)) {
+        return res.status(403).json({ error: 'Insufficient permissions to approve leave requests' });
+      }
+
+      // Check if manager is approving their direct report
+      const leaveCheck = await query(
+        `SELECT e.reporting_manager_id 
+         FROM leave_requests lr
+         JOIN employees e ON e.id = lr.employee_id
+         WHERE lr.id = $1`,
+        [id]
+      );
+
+      if (reviewerRole === 'manager' && leaveCheck.rows.length > 0) {
+        const reportingManagerId = leaveCheck.rows[0].reporting_manager_id;
+        if (reportingManagerId !== reviewerId) {
+          return res.status(403).json({ error: 'You can only approve leave requests from your direct reports' });
+        }
+      }
+
       if (approvalsTableExists) {
         result = await apply_approval('leave', id, reviewerId, 'approve', null);
       } else {

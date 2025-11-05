@@ -188,9 +188,9 @@ router.post('/submit', authenticateToken, async (req, res) => {
           permanent_address, permanent_city, permanent_state, permanent_postal_code,
           current_address, current_city, current_state, current_postal_code,
           bank_account_number, bank_name, bank_branch, ifsc_code,
-          pan_number, aadhar_number, passport_number, completed_at, tenant_id
+          pan_number, aadhar_number, passport_number, gender, completed_at, tenant_id
         )
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, now(), $24)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, now(), $25)
         ON CONFLICT (employee_id) 
         DO UPDATE SET
           emergency_contact_name = $2,
@@ -215,8 +215,9 @@ router.post('/submit', authenticateToken, async (req, res) => {
           pan_number = $21,
           aadhar_number = $22,
           passport_number = $23,
+          gender = $24,
           completed_at = now(),
-          tenant_id = $24,
+          tenant_id = $25,
           updated_at = now()`,
         [
           employeeId,
@@ -242,9 +243,19 @@ router.post('/submit', authenticateToken, async (req, res) => {
           onboardingData.panNumber,
           onboardingData.aadharNumber,
           onboardingData.passportNumber || null,
+          onboardingData.gender || null,
           tenantId
         ]
       );
+
+      // Update profile with gender if provided
+      if (onboardingData.gender) {
+        await query(
+          `UPDATE profiles SET gender = $1, updated_at = now() 
+           WHERE id = (SELECT user_id FROM employees WHERE id = $2)`,
+          [onboardingData.gender, employeeId]
+        );
+      }
 
       // Update employee onboarding status
       await query(
