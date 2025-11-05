@@ -819,6 +819,119 @@ class ApiClient {
       body: JSON.stringify({ comment }),
     });
   }
+
+  // Policy methods
+  async getPolicyCatalog() {
+    return this.request('/api/policies/catalog');
+  }
+
+  async getOrgPolicies(date?: string) {
+    const url = date 
+      ? `/api/policies/org?date=${date}`
+      : '/api/policies/org';
+    return this.request(url);
+  }
+
+  async createOrgPolicy(data: {
+    policy_key: string;
+    value: any;
+    effective_from?: string;
+    effective_to?: string;
+  }) {
+    return this.request('/api/policies/org', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async getEmployeePolicies(userId: string, date?: string) {
+    const url = date
+      ? `/api/policies/employee/${userId}?date=${date}`
+      : `/api/policies/employee/${userId}`;
+    return this.request(url);
+  }
+
+  async createEmployeePolicy(userId: string, data: {
+    policy_key: string;
+    value: any;
+    effective_from?: string;
+    effective_to?: string;
+  }) {
+    return this.request(`/api/policies/employee/${userId}`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  // Promotion methods
+  async getPromotionHealth() {
+    return this.request('/api/promotion/health');
+  }
+
+  async createPromotionCycle(data: {
+    name: string;
+    period: 'QUARTERLY' | 'H1' | 'ANNUAL' | 'CUSTOM';
+    start_date: string;
+    end_date: string;
+    criteria?: any;
+  }) {
+    return this.request('/api/promotion/cycles', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async getCurrentPromotionCycles() {
+    return this.request('/api/promotion/cycles/current');
+  }
+
+  async submitPromotionEvaluation(data: {
+    cycle_id: string;
+    employee_id: string;
+    rating: number;
+    remarks?: string;
+    recommendation?: 'NONE' | 'PROMOTE' | 'HOLD';
+    attachments?: any;
+  }) {
+    return this.request('/api/promotion/evaluations', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async reviewPromotionEvaluation(id: string) {
+    return this.request(`/api/promotion/review/${id}`, {
+      method: 'POST',
+    });
+  }
+
+  async approvePromotion(id: string) {
+    return this.request(`/api/promotion/approve/${id}`, {
+      method: 'POST',
+    });
+  }
+
+  // User invite methods
+  async inviteUsers(data: {
+    emails: string[];
+    role: string;
+  }) {
+    return this.request('/api/users/invite', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  // First login
+  async firstLogin(data: {
+    token: string;
+    newPassword: string;
+  }) {
+    return this.request('/api/auth/first-login', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
 }
 
 export const api = new ApiClient(API_URL);

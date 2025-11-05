@@ -74,6 +74,9 @@ export default function Onboarding() {
     gender: "" as "male" | "female" | "other" | "prefer_not_to_say" | "",
   });
 
+  const [documents, setDocuments] = useState<Array<{ id: string; document_type: string; file_name: string; uploaded_at: string }>>([]);
+  const [uploading, setUploading] = useState(false);
+
   useEffect(() => {
     fetchEmployeeId();
   }, [user]);
@@ -104,7 +107,7 @@ export default function Onboarding() {
   };
 
   const handleNext = () => {
-    if (step < 3) setStep(step + 1);
+    if (step < 4) setStep(step + 1);
   };
 
   const handleBack = () => {
@@ -163,7 +166,81 @@ export default function Onboarding() {
     }
   };
 
-  const progress = (step / 3) * 100;
+  const handleDocumentUpload = async (file: File, documentType: string) => {
+    if (!employeeId) {
+      toast({
+        title: "Error",
+        description: "Employee ID not found",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setUploading(true);
+    try {
+      const formData = new FormData();
+      formData.append('document', file);
+      formData.append('employeeId', employeeId);
+      formData.append('documentType', documentType);
+
+      const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:3001'}/api/onboarding/upload-document`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+        },
+        body: formData,
+      });
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.error || 'Failed to upload document');
+      }
+
+      toast({
+        title: "Document uploaded",
+        description: `${file.name} uploaded successfully`,
+      });
+
+      // Refresh documents list
+      fetchDocuments();
+    } catch (error: any) {
+      toast({
+        title: "Upload failed",
+        description: error.message || "Failed to upload document",
+        variant: "destructive",
+      });
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const fetchDocuments = async () => {
+    if (!employeeId) return;
+
+    try {
+      const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:3001'}/api/onboarding/documents/${employeeId}`, {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+        },
+      });
+
+      const result = await response.json();
+      if (result.success && result.documents) {
+        setDocuments(result.documents);
+      }
+    } catch (error) {
+      console.error('Error fetching documents:', error);
+    }
+  };
+
+  useEffect(() => {
+    if (employeeId) {
+      fetchDocuments();
+    }
+  }, [employeeId]);
+
+  const progress = (step / 4) * 100;
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-background p-4">
@@ -207,22 +284,25 @@ export default function Onboarding() {
                     />
                   </div>
                 </div>
-                <div className="space-y-2">
-                  <Label htmlFor="gender">Gender</Label>
-                  <Select
-                    value={formData.gender}
-                    onValueChange={(value) => setFormData({ ...formData, gender: value as typeof formData.gender })}
-                  >
-                    <SelectTrigger id="gender">
-                      <SelectValue placeholder="Select gender (optional)" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="male">Male</SelectItem>
-                      <SelectItem value="female">Female</SelectItem>
-                      <SelectItem value="other">Other</SelectItem>
-                      <SelectItem value="prefer_not_to_say">Prefer not to say</SelectItem>
-                    </SelectContent>
-                  </Select>
+                <div className="space-y-4 pt-4 border-t">
+                  <h4 className="text-md font-medium">Personal Information</h4>
+                  <div className="space-y-2">
+                    <Label htmlFor="gender">Your Gender (Optional)</Label>
+                    <Select
+                      value={formData.gender}
+                      onValueChange={(value) => setFormData({ ...formData, gender: value as typeof formData.gender })}
+                    >
+                      <SelectTrigger id="gender">
+                        <SelectValue placeholder="Select your gender (optional)" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="male">Male</SelectItem>
+                        <SelectItem value="female">Female</SelectItem>
+                        <SelectItem value="other">Other</SelectItem>
+                        <SelectItem value="prefer_not_to_say">Prefer not to say</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
                 </div>
                 <div className="space-y-4">
                   <div>
@@ -391,18 +471,115 @@ export default function Onboarding() {
               </div>
             )}
 
+            {step === 4 && (
+              <div className="space-y-4">
+                <h3 className="text-lg font-semibold">Verification Documents</h3>
+                <p className="text-sm text-muted-foreground">
+                  Please upload copies of your verification documents (PAN, Aadhar, Passport, etc.)
+                </p>
+                
+                <div className="space-y-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="panDocument">PAN Card Document</Label>
+                    <Input
+                      id="panDocument"
+                      type="file"
+                      accept=".pdf,.jpg,.jpeg,.png,.doc,.docx"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (file) {
+                          handleDocumentUpload(file, 'PAN');
+                        }
+                      }}
+                      disabled={uploading}
+                    />
+                  </div>
+                  
+                  <div className="space-y-2">
+                    <Label htmlFor="aadharDocument">Aadhar Card Document</Label>
+                    <Input
+                      id="aadharDocument"
+                      type="file"
+                      accept=".pdf,.jpg,.jpeg,.png,.doc,.docx"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (file) {
+                          handleDocumentUpload(file, 'Aadhar');
+                        }
+                      }}
+                      disabled={uploading}
+                    />
+                  </div>
+                  
+                  <div className="space-y-2">
+                    <Label htmlFor="passportDocument">Passport Document (Optional)</Label>
+                    <Input
+                      id="passportDocument"
+                      type="file"
+                      accept=".pdf,.jpg,.jpeg,.png,.doc,.docx"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (file) {
+                          handleDocumentUpload(file, 'Passport');
+                        }
+                      }}
+                      disabled={uploading}
+                    />
+                  </div>
+                  
+                  <div className="space-y-2">
+                    <Label htmlFor="bankDocument">Bank Statement / Cancelled Cheque</Label>
+                    <Input
+                      id="bankDocument"
+                      type="file"
+                      accept=".pdf,.jpg,.jpeg,.png,.doc,.docx"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (file) {
+                          handleDocumentUpload(file, 'Bank Statement');
+                        }
+                      }}
+                      disabled={uploading}
+                    />
+                  </div>
+                </div>
+
+                {uploading && (
+                  <p className="text-sm text-muted-foreground">Uploading document...</p>
+                )}
+
+                {documents.length > 0 && (
+                  <div className="space-y-2 mt-4">
+                    <Label>Uploaded Documents</Label>
+                    <div className="space-y-2">
+                      {documents.map((doc) => (
+                        <div key={doc.id} className="flex items-center justify-between p-2 border rounded">
+                          <div>
+                            <p className="text-sm font-medium">{doc.file_name}</p>
+                            <p className="text-xs text-muted-foreground">
+                              {doc.document_type} • {new Date(doc.uploaded_at).toLocaleDateString()}
+                            </p>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
             <div className="flex gap-4 pt-4">
               {step > 1 && (
                 <Button type="button" variant="outline" onClick={handleBack}>
                   Back
                 </Button>
               )}
-              {step < 3 ? (
+              {step < 4 ? (
                 <Button type="button" onClick={handleNext}>
                   Next
                 </Button>
               ) : (
-                <Button type="submit" disabled={loading}>
+                <Button type="submit" disabled={loading || uploading}>
                   {loading ? "Submitting..." : "Complete Onboarding"}
                 </Button>
               )}

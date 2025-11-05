@@ -44,18 +44,19 @@ export async function query(text, params) {
   return pool.query(text, params);
 }
 
-export async function withClient(fn, tenantId) {
+export async function withClient(fn, orgId) {
   const pool = getPool();
   const client = await pool.connect();
   try {
-    if (tenantId) {
+    if (orgId) {
       // PostgreSQL SET SESSION doesn't support parameters, so we need to format it
       // Validate it's a UUID format (basic check)
       const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-      if (uuidRegex.test(tenantId)) {
-        await client.query(`SET SESSION app.current_tenant = '${tenantId}'`);
+      if (uuidRegex.test(orgId)) {
+        // Set session variable for RLS
+        await client.query(`SET LOCAL app.org_id = '${orgId}'`);
       } else {
-        throw new Error(`Invalid tenant ID format: ${tenantId}`);
+        throw new Error(`Invalid org ID format: ${orgId}`);
       }
     }
     const result = await fn(client);
@@ -63,5 +64,21 @@ export async function withClient(fn, tenantId) {
   } finally {
     client.release();
   }
+}
+
+/**
+ * Execute a query with org context (for RLS)
+ * @param {string} text - SQL query
+ * @param {Array} params - Query parameters
+ * @param {string} orgId - Organization ID for RLS context
+ */
+export async function queryWithOrg(text, params, orgId) {
+  if (!orgId) {
+    return query(text, params);
+  }
+  
+  return withClient(async (client) => {
+    return client.query(text, params);
+  }, orgId);
 }
 

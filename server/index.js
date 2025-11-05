@@ -39,6 +39,8 @@ import terminationsRoutes from './routes/terminations.js';
 import documentsRoutes from './routes/documents.js';
 import offboardingRoutes from './routes/offboarding.js';
 import rehireRoutes from './routes/rehire.js';
+import policiesRoutes from './routes/policies.js';
+import usersRoutes from './routes/users.js';
 import { setTenantContext } from './middleware/tenant.js';
 import { scheduleHolidayNotifications, scheduleNotificationRules } from './services/cron.js';
 import { scheduleOffboardingJobs } from './services/offboarding-cron.js';
@@ -109,6 +111,11 @@ app.use('/api/terminations', authenticateToken, terminationsRoutes);
 app.use('/api/documents', authenticateToken, documentsRoutes);
 app.use('/api/offboarding', authenticateToken, offboardingRoutes);
 app.use('/api/rehire', authenticateToken, rehireRoutes);
+// Multi-tenant routes
+app.use('/api/orgs', organizationsRoutes);
+app.use('/api/policies', authenticateToken, setTenantContext, policiesRoutes);
+app.use('/api/users', usersRoutes);
+app.use('/api/promotion', authenticateToken, setTenantContext, promotionsRoutes);
 
 // Public discovery endpoint for AI tools (requires API key in header)
 app.get('/discovery', (req, res, next) => {

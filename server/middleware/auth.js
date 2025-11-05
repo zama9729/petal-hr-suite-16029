@@ -1,6 +1,7 @@
 import jwt from 'jsonwebtoken';
+import { query, withClient } from '../db/pool.js';
 
-export function authenticateToken(req, res, next) {
+export async function authenticateToken(req, res, next) {
   const authHeader = req.headers['authorization'];
   const token = authHeader && authHeader.split(' ')[1];
 
@@ -8,13 +9,35 @@ export function authenticateToken(req, res, next) {
     return res.status(401).json({ error: 'No token provided', errors: [] });
   }
 
-  jwt.verify(token, process.env.JWT_SECRET || 'your-secret-key', (err, user) => {
-    if (err) {
-      return res.status(403).json({ error: 'Invalid or expired token', errors: [] });
+  try {
+    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'your-secret-key');
+    req.user = decoded;
+    
+    // If JWT has org_id, use it; otherwise fetch from database
+    let orgId = decoded.org_id;
+    if (!orgId) {
+      const profileResult = await query(
+        'SELECT tenant_id FROM profiles WHERE id = $1',
+        [decoded.id]
+      );
+      orgId = profileResult.rows[0]?.tenant_id;
     }
-    req.user = user;
+    
+    // Set org_id in request for use by other middleware and RLS
+    req.orgId = orgId;
+    
+    // Set PostgreSQL session context for RLS (will be used by withClient wrapper)
+    if (orgId) {
+      const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+      if (!uuidRegex.test(orgId)) {
+        orgId = null;
+      }
+    }
+    
     next();
-  });
+  } catch (err) {
+    return res.status(403).json({ error: 'Invalid or expired token', errors: [] });
+  }
 }
 
 export function requireRole(...allowedRoles) {
@@ -30,15 +53,18 @@ export function requireRole(...allowedRoles) {
     }
 
     // Get user role from database
-    const { query } = await import('../db/pool.js');
     const { rows } = await query(
-      'SELECT role FROM user_roles WHERE user_id = $1',
+      'SELECT role FROM user_roles WHERE user_id = $1 LIMIT 1',
       [req.user.id]
     );
 
     const userRole = rows[0]?.role;
     
-    if (!userRole || !allowedRoles.includes(userRole)) {
+    // Normalize role names (case-insensitive comparison)
+    const normalizedUserRole = userRole?.toLowerCase();
+    const normalizedAllowedRoles = allowedRoles.map(r => r.toLowerCase());
+    
+    if (!userRole || !normalizedAllowedRoles.includes(normalizedUserRole)) {
       return res.status(403).json({ error: 'Insufficient permissions', errors: [] });
     }
 

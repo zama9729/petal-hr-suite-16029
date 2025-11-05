@@ -1,10 +1,12 @@
 import express from 'express';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
+import crypto from 'crypto';
 import { query } from '../db/pool.js';
 import { authenticateToken, requireRole } from '../middleware/auth.js';
 import multer from 'multer';
 import { parse } from 'csv-parse/sync';
+import { sendInviteEmail } from '../services/email.js';
 
 const router = express.Router();
 
@@ -352,12 +354,79 @@ router.post('/', authenticateToken, async (req, res) => {
         [userId, role || 'employee', tenantId]
       );
 
+      // Create invite token and send email
+      try {
+        // Get org info for email (check if slug column exists)
+        let orgResult;
+        try {
+          const columnCheck = await query(`
+            SELECT column_name 
+            FROM information_schema.columns 
+            WHERE table_name = 'organizations' AND column_name = 'slug'
+          `);
+          const hasSlugColumn = columnCheck.rows.length > 0;
+          
+          if (hasSlugColumn) {
+            orgResult = await query('SELECT name, slug FROM organizations WHERE id = $1', [tenantId]);
+          } else {
+            orgResult = await query('SELECT name FROM organizations WHERE id = $1', [tenantId]);
+            if (orgResult.rows.length > 0) {
+              orgResult.rows[0].slug = null;
+            }
+          }
+        } catch (error) {
+          // Fallback if check fails
+          orgResult = await query('SELECT name FROM organizations WHERE id = $1', [tenantId]);
+          if (orgResult.rows.length > 0) {
+            orgResult.rows[0].slug = null;
+          }
+        }
+        
+        const org = orgResult.rows[0] || { name: 'Organization', slug: null };
+
+        // Check if invite_tokens table exists
+        const tableCheck = await query(`
+          SELECT table_name 
+          FROM information_schema.tables 
+          WHERE table_schema = 'public' AND table_name = 'invite_tokens'
+        `);
+        
+        if (tableCheck.rows.length > 0) {
+          // Generate invite token
+          const token = crypto.randomBytes(32).toString('hex');
+          const expiresAt = new Date();
+          expiresAt.setHours(expiresAt.getHours() + 72); // 72 hours expiry
+
+          // Create invite token
+          await query(
+            `INSERT INTO invite_tokens (org_id, email, token, expires_at)
+             VALUES ($1, $2, $3, $4)`,
+            [tenantId, email.toLowerCase().trim(), token, expiresAt]
+          );
+
+          // Send invite email
+          try {
+            await sendInviteEmail(email, org.name, org.slug || 'org', token);
+            console.log(`✅ Invite email sent to ${email}`);
+          } catch (emailError) {
+            console.error(`⚠️  Failed to send invite email to ${email}:`, emailError);
+            // Continue even if email fails - invite token is still created
+          }
+        } else {
+          console.log(`⚠️  invite_tokens table not found. Skipping invite email for ${email}.`);
+          console.log(`   Please run the migration: server/db/migrations/20241201_multi_tenant_rls.sql`);
+        }
+      } catch (inviteError) {
+        console.error(`⚠️  Failed to create invite token for ${email}:`, inviteError);
+        // Continue even if invite creation fails
+      }
+
       await query('COMMIT');
 
       res.status(201).json({
         success: true,
         email,
-        message: 'Employee created successfully. They can use "First Time Login".',
+        message: 'Employee created successfully. Invite email has been sent.',
         userId
       });
     } catch (error) {

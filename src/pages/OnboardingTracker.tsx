@@ -36,9 +36,10 @@ export default function OnboardingTracker() {
 
   const fetchOnboardingEmployees = async () => {
     try {
+      setLoading(true);
       const data = await api.getOnboardingEmployees();
       
-      if (data) {
+      if (data && Array.isArray(data)) {
         setEmployees(data as any);
         
         // Calculate stats
@@ -47,9 +48,15 @@ export default function OnboardingTracker() {
         const completed = data.filter((e: any) => e.onboarding_status === 'completed').length;
         
         setStats({ notStarted, inProgress, completed });
+      } else {
+        console.warn('Invalid data format from API:', data);
+        setEmployees([]);
+        setStats({ notStarted: 0, inProgress: 0, completed: 0 });
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error fetching onboarding employees:', error);
+      setEmployees([]);
+      setStats({ notStarted: 0, inProgress: 0, completed: 0 });
     } finally {
       setLoading(false);
     }

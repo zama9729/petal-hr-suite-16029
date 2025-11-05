@@ -9,7 +9,10 @@
     "start": "node index.js",
     "test": "node server/tests/permissions.test.js && node server/tests/routes.test.js",
     "test:permissions": "node server/tests/permissions.test.js",
-    "test:routes": "node server/tests/routes.test.js"
+    "test:routes": "node server/tests/routes.test.js",
+    "seed:policies": "node server/scripts/seed-policy-catalog.js",
+    "org:reset": "node server/scripts/reset-org.js",
+    "fix:role": "node server/scripts/fix-user-role.js"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",
@@ -22,6 +25,7 @@
     "jsonwebtoken": "^9.0.2",
     "multer": "^2.0.2",
     "node-cron": "^3.0.3",
+    "nodemailer": "^6.9.7",
     "openai": "^4.104.0",
     "pg": "^8.11.3",
     "redis": "^4.6.10",

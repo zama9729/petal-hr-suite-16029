@@ -1,6 +1,7 @@
 import express from 'express';
-import { query } from '../db/pool.js';
+import { query, queryWithOrg } from '../db/pool.js';
 import { authenticateToken, requireRole, requireSuperadmin } from '../middleware/auth.js';
+import { setTenantContext } from '../middleware/tenant.js';
 import { Parser } from 'json2csv';
 
 const router = express.Router();
@@ -114,6 +115,134 @@ router.get('/access', authenticateToken, async (req, res) => {
     .filter(Boolean);
   const superadmin = email && adminEmails.includes(email);
   res.json({ superadmin });
+});
+
+// Tenant-safe database reset (ADMIN/CEO only)
+// DELETE /admin/orgs/:orgId/reset
+// Requires: X-CONFIRM-RESET header with org slug, ORG_RESET_CONFIRM env passphrase
+router.delete('/orgs/:orgId/reset', authenticateToken, setTenantContext, requireRole('admin', 'ceo'), async (req, res) => {
+  try {
+    const { orgId } = req.params;
+    const orgIdFromRequest = req.orgId || req.user?.org_id;
+    
+    // Verify orgId matches
+    if (orgId !== orgIdFromRequest) {
+      return res.status(403).json({ error: 'Cross-org reset denied' });
+    }
+
+    // Verify confirm header
+    const confirmSlug = req.headers['x-confirm-reset'];
+    if (!confirmSlug) {
+      return res.status(400).json({ error: 'X-CONFIRM-RESET header required' });
+    }
+
+    // Get org slug
+    const orgResult = await query(
+      'SELECT slug, name FROM organizations WHERE id = $1',
+      [orgId]
+    );
+
+    if (orgResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Organization not found' });
+    }
+
+    const org = orgResult.rows[0];
+
+    // Verify slug matches
+    if (confirmSlug !== org.slug) {
+      return res.status(400).json({ error: 'Slug confirmation mismatch' });
+    }
+
+    // Verify passphrase (if set)
+    const passphrase = process.env.ORG_RESET_CONFIRM;
+    if (passphrase) {
+      const providedPassphrase = req.headers['x-reset-passphrase'];
+      if (!providedPassphrase || providedPassphrase !== passphrase) {
+        return res.status(403).json({ error: 'Invalid reset passphrase' });
+      }
+    }
+
+    // Get requesting admin user ID
+    const adminUserId = req.user.id;
+
+    // Start transaction
+    await query('BEGIN');
+
+    try {
+      // Delete in order (respect FK constraints)
+      // 1. Promotion evaluations
+      await query(
+        `DELETE FROM promotion_evaluations 
+         WHERE cycle_id IN (SELECT id FROM promotion_cycles WHERE org_id = $1)`,
+        [orgId]
+      );
+
+      // 2. Promotion cycles
+      await query('DELETE FROM promotion_cycles WHERE org_id = $1', [orgId]);
+
+      // 3. Employee policies
+      await query(
+        `DELETE FROM employee_policies 
+         WHERE user_id IN (SELECT id FROM profiles WHERE tenant_id = $1)`,
+        [orgId]
+      );
+
+      // 4. Org policies
+      await query('DELETE FROM org_policies WHERE org_id = $1', [orgId]);
+
+      // 5. Audit logs
+      await query('DELETE FROM audit_logs WHERE org_id = $1', [orgId]);
+
+      // 6. Invite tokens
+      await query('DELETE FROM invite_tokens WHERE org_id = $1', [orgId]);
+
+      // 7. Other org-scoped tables (keep existing employees, profiles, etc. for now)
+      // Note: We're only resetting the new multi-tenant tables
+      // If you want to reset all data, uncomment:
+      /*
+      await query('DELETE FROM leave_requests WHERE tenant_id = $1', [orgId]);
+      await query('DELETE FROM timesheets WHERE tenant_id = $1', [orgId]);
+      await query('DELETE FROM notifications WHERE tenant_id = $1', [orgId]);
+      await query('DELETE FROM employees WHERE tenant_id = $1 AND user_id != $2', [orgId, adminUserId]);
+      await query('DELETE FROM user_roles WHERE tenant_id = $1 AND user_id != $2', [orgId, adminUserId]);
+      await query('DELETE FROM profiles WHERE tenant_id = $1 AND id != $2', [orgId, adminUserId]);
+      */
+
+      // Log audit (before deleting audit_logs)
+      await query(
+        `INSERT INTO audit_logs (org_id, actor_user_id, action, object_type, object_id, payload)
+         VALUES ($1, $2, $3, $4, $5, $6)`,
+        [
+          orgId,
+          adminUserId,
+          'reset',
+          'organization',
+          orgId,
+          JSON.stringify({ 
+            org_name: org.name,
+            org_slug: org.slug,
+            reset_by: adminUserId,
+            timestamp: new Date().toISOString()
+          })
+        ]
+      );
+
+      await query('COMMIT');
+
+      res.json({
+        success: true,
+        message: `Organization ${org.name} data has been reset`,
+        org_id: orgId,
+        reset_at: new Date().toISOString()
+      });
+    } catch (error) {
+      await query('ROLLBACK');
+      throw error;
+    }
+  } catch (error) {
+    console.error('Error resetting organization:', error);
+    res.status(500).json({ error: error.message || 'Failed to reset organization' });
+  }
 });
 
 export default router;

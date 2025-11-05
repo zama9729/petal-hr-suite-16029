@@ -9,6 +9,7 @@ import { ProtectedRoute, PublicRoute } from "./components/ProtectedRoute";
 // Pages
 import Login from "./pages/auth/Login";
 import FirstTimeLogin from "./pages/auth/FirstTimeLogin";
+import FirstLoginWithToken from "./pages/auth/FirstLoginWithToken";
 import Signup from "./pages/auth/Signup";
 import Dashboard from "./pages/Dashboard";
 import Employees from "./pages/Employees";
@@ -52,6 +53,9 @@ import OffboardingNew from "./pages/OffboardingNew";
 import OffboardingQueue from "./pages/OffboardingQueue";
 import OffboardingDetail from "./pages/OffboardingDetail";
 import OffboardingPolicies from "./pages/OffboardingPolicies";
+import OnboardingEnhanced from "./pages/OnboardingEnhanced";
+import PoliciesManagement from "./pages/PoliciesManagement";
+import PromotionCycles from "./pages/PromotionCycles";
 
 const queryClient = new QueryClient();
 
@@ -67,6 +71,7 @@ const App = () => (
             <Route path="/auth/login" element={<PublicRoute><Login /></PublicRoute>} />
             <Route path="/auth/signup" element={<PublicRoute><Signup /></PublicRoute>} />
             <Route path="/auth/first-time-login" element={<FirstTimeLogin />} />
+            <Route path="/auth/first-login" element={<FirstLoginWithToken />} />
             <Route path="/setup-password" element={<SetupPassword />} />
             
             {/* Protected routes */}
@@ -113,9 +118,14 @@ const App = () => (
             <Route path="/terminations" element={<ProtectedRoute allowedRoles={['hr', 'director', 'ceo', 'admin']}><Terminations /></ProtectedRoute>} />
             <Route path="/documents" element={<ProtectedRoute><DocumentInbox /></ProtectedRoute>} />
             <Route path="/offboarding/new" element={<ProtectedRoute><OffboardingNew /></ProtectedRoute>} />
-            <Route path="/offboarding/policies" element={<ProtectedRoute allowedRoles={['hr', 'admin']}><OffboardingPolicies /></ProtectedRoute>} />
+            <Route path="/offboarding/policies" element={<ProtectedRoute allowedRoles={['hr', 'ceo', 'admin']}><OffboardingPolicies /></ProtectedRoute>} />
             <Route path="/offboarding" element={<ProtectedRoute allowedRoles={['hr', 'director', 'ceo', 'admin', 'manager']}><OffboardingQueue /></ProtectedRoute>} />
             <Route path="/offboarding/:id" element={<ProtectedRoute><OffboardingDetail /></ProtectedRoute>} />
+            
+            {/* Multi-tenant routes */}
+            <Route path="/onboarding/enhanced" element={<ProtectedRoute><OnboardingEnhanced /></ProtectedRoute>} />
+            <Route path="/policies/management" element={<ProtectedRoute allowedRoles={['hr', 'director', 'ceo', 'admin']}><PoliciesManagement /></ProtectedRoute>} />
+            <Route path="/promotion/cycles" element={<ProtectedRoute><PromotionCycles /></ProtectedRoute>} />
             
             {/* Redirects */}
             <Route path="/" element={<Navigate to="/dashboard" />} />

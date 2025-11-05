@@ -18,10 +18,18 @@ router.get('/employees', authenticateToken, async (req, res) => {
       return res.status(403).json({ error: 'No organization found' });
     }
 
-    // Get employees with onboarding data
+    // Get all employees with onboarding data (including completed)
     const result = await query(
       `SELECT 
-        e.*,
+        e.id,
+        e.employee_id,
+        e.onboarding_status,
+        e.must_change_password,
+        e.join_date,
+        e.position,
+        e.department,
+        e.created_at,
+        e.updated_at,
         json_build_object(
           'first_name', p.first_name,
           'last_name', p.last_name,
@@ -37,8 +45,13 @@ router.get('/employees', authenticateToken, async (req, res) => {
       JOIN profiles p ON p.id = e.user_id
       LEFT JOIN onboarding_data od ON od.employee_id = e.id
       WHERE e.tenant_id = $1
-        AND e.onboarding_status IN ('pending', 'in_progress', 'not_started')
-      ORDER BY e.created_at DESC`,
+      ORDER BY 
+        CASE 
+          WHEN e.onboarding_status = 'completed' THEN 3
+          WHEN e.onboarding_status = 'in_progress' THEN 2
+          ELSE 1
+        END,
+        e.created_at DESC`,
       [tenantId]
     );
 

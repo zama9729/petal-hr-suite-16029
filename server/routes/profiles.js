@@ -19,6 +19,14 @@ router.get('/me', authenticateToken, async (req, res) => {
 
     const profile = profileResult.rows[0];
 
+    // Get all user roles first to debug
+    const allRolesResult = await query(
+      `SELECT role FROM user_roles WHERE user_id = $1 ORDER BY role`,
+      [req.user.id]
+    );
+    
+    const allRoles = allRolesResult.rows.map(r => r.role);
+    
     // Get highest priority role (same logic as get_user_role function)
     const roleResult = await query(
       `SELECT role FROM user_roles WHERE user_id = $1
@@ -46,6 +54,11 @@ router.get('/me', authenticateToken, async (req, res) => {
     const directReportsCount = parseInt(hasDirectReports.rows[0]?.count || '0');
 
     let role = roleResult.rows[0]?.role || 'employee';
+    
+    // Log if user has multiple roles to help debug
+    if (allRoles.length > 1) {
+      console.log(`User ${req.user.id} has multiple roles: ${allRoles.join(', ')}. Using: ${role}`);
+    }
 
     // If user has direct reports but doesn't have manager role, auto-assign it
     if (directReportsCount > 0 && role !== 'manager' && !['admin', 'ceo', 'director', 'hr'].includes(role)) {
