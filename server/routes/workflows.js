@@ -21,6 +21,26 @@ async function ensureWorkflowsTable() {
   `);
 }
 
+// List saved workflows for current tenant
+router.get('/', authenticateToken, async (req, res) => {
+  try {
+    await ensureWorkflowsTable();
+    const tenantId = await getTenantId(req.user.id);
+    if (!tenantId) return res.status(403).json({ error: 'No organization found' });
+    const { rows } = await query(
+      `SELECT id, name, description, status, created_at, updated_at
+       FROM workflows
+       WHERE tenant_id = $1
+       ORDER BY updated_at DESC`,
+      [tenantId]
+    );
+    res.json({ workflows: rows });
+  } catch (e) {
+    console.error('List workflows error', e);
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // Helper: get tenant for current user
 async function getTenantId(userId) {
   const res = await query('SELECT tenant_id FROM profiles WHERE id = $1', [userId]);
@@ -115,6 +135,67 @@ router.post('/', authenticateToken, async (req, res) => {
     res.json({ id: result.rows[0].id });
   } catch (e) {
     console.error('Save workflow error', e);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Read workflow by id
+router.get('/:id', authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const tenantId = await getTenantId(req.user.id);
+    const { rows } = await query(
+      `SELECT id, name, description, status, workflow_json, created_at, updated_at
+       FROM workflows WHERE id=$1 AND tenant_id=$2`,
+      [id, tenantId]
+    );
+    if (rows.length === 0) return res.status(404).json({ error: 'Not found' });
+    res.json(rows[0]);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Update workflow (metadata and/or status and/or definition)
+router.put('/:id', authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { name, description, status, workflow } = req.body || {};
+    const tenantId = await getTenantId(req.user.id);
+    // Build dynamic update
+    const fields = [];
+    const values = [];
+    let idx = 1;
+    if (name !== undefined) { fields.push(`name=$${idx++}`); values.push(name); }
+    if (description !== undefined) { fields.push(`description=$${idx++}`); values.push(description); }
+    if (status !== undefined) { fields.push(`status=$${idx++}`); values.push(status); }
+    if (workflow !== undefined) { fields.push(`workflow_json=$${idx++}`); values.push(workflow); }
+    if (fields.length === 0) return res.status(400).json({ error: 'No updates provided' });
+    values.push(id, tenantId);
+    const { rows } = await query(
+      `UPDATE workflows SET ${fields.join(', ')}, updated_at=now() WHERE id=$${idx++} AND tenant_id=$${idx}
+       RETURNING id, name, description, status, created_at, updated_at`,
+      values
+    );
+    if (rows.length === 0) return res.status(404).json({ error: 'Not found' });
+    res.json(rows[0]);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Delete workflow
+router.delete('/:id', authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const tenantId = await getTenantId(req.user.id);
+    const { rowCount } = await query(
+      `DELETE FROM workflows WHERE id=$1 AND tenant_id=$2`,
+      [id, tenantId]
+    );
+    if (rowCount === 0) return res.status(404).json({ error: 'Not found' });
+    res.json({ ok: true });
+  } catch (e) {
     res.status(500).json({ error: e.message });
   }
 });

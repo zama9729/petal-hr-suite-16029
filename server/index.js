@@ -12,8 +12,8 @@ import statsRoutes from './routes/stats.js';
 import adminRoutes from './routes/admin.js';
 import notificationsRoutes from './routes/notifications.js';
 import timesheetsRoutes from './routes/timesheets.js';
-import leavePoliciesRoutes from './routes/leave-policies.js';
 import leaveRequestsRoutes from './routes/leave-requests.js';
+import leavePoliciesRoutes from './routes/leave-policies.js';
 import appraisalCycleRoutes from './routes/appraisal-cycles.js';
 import performanceReviewRoutes from './routes/performance-reviews.js';
 import { authenticateToken } from './middleware/auth.js';
@@ -25,11 +25,9 @@ import employeeProjectsRoutes from './routes/employee-projects.js';
 import holidaysRoutes from './routes/holidays.js';
 import calendarRoutes from './routes/calendar.js';
 import analyticsRoutes from './routes/analytics.js';
-import employeeStatsRoutes from './routes/employee-stats.js';
-import migrationsRoutes from './routes/migrations.js';
+import ragRoutes from './routes/rag.js';
 import aiRoutes from './routes/ai.js';
 import importsRoutes from './routes/imports.js';
-import checkInOutRoutes from './routes/check-in-out.js';
 import { setTenantContext } from './middleware/tenant.js';
 import { scheduleHolidayNotifications } from './services/cron.js';
 
@@ -63,8 +61,8 @@ app.use('/api/organizations', organizationsRoutes);
 app.use('/api/stats', statsRoutes);
 app.use('/api/notifications', notificationsRoutes);
 app.use('/api/timesheets', timesheetsRoutes);
-app.use('/api/leave-policies', authenticateToken, setTenantContext, leavePoliciesRoutes);
 app.use('/api/leave-requests', authenticateToken, leaveRequestsRoutes);
+app.use('/api/leave-policies', authenticateToken, leavePoliciesRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/shifts', authenticateToken, shiftsRoutes);
 // Mount core workflow routes with auth and tenant context
@@ -84,9 +82,7 @@ app.use('/api/v1', authenticateToken, setTenantContext, employeeProjectsRoutes);
 app.use('/api', authenticateToken, setTenantContext, holidaysRoutes);
 app.use('/api/calendar', calendarRoutes);
 app.use('/api/analytics', authenticateToken, analyticsRoutes);
-app.use('/api/employee-stats', authenticateToken, employeeStatsRoutes);
-app.use('/api/migrations', migrationsRoutes);
-app.use('/api/check-in-out', checkInOutRoutes);
+app.use('/api/rag', authenticateToken, ragRoutes);
 
 // Public discovery endpoint for AI tools (requires API key in header)
 app.get('/discovery', (req, res, next) => {
@@ -172,6 +168,32 @@ createPool().then(async () => {
       level TEXT NOT NULL DEFAULT 'info',
       message TEXT NOT NULL,
       data JSONB,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+
+    -- RAG tables
+    CREATE TABLE IF NOT EXISTS rag_chunks (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      tenant_id UUID REFERENCES organizations(id) ON DELETE CASCADE NOT NULL,
+      doc_id TEXT NOT NULL,
+      chunk TEXT NOT NULL,
+      embedding DOUBLE PRECISION[] NOT NULL,
+      allowed_roles TEXT[] NOT NULL,
+      confidentiality_level TEXT DEFAULT 'internal',
+      pii_flags JSONB,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+    CREATE INDEX IF NOT EXISTS idx_rag_chunks_tenant ON rag_chunks(tenant_id);
+    CREATE INDEX IF NOT EXISTS idx_rag_chunks_doc ON rag_chunks(doc_id);
+
+    CREATE TABLE IF NOT EXISTS rag_audit_logs (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      user_id UUID REFERENCES profiles(id) ON DELETE SET NULL,
+      tenant_id UUID REFERENCES organizations(id) ON DELETE CASCADE,
+      role TEXT,
+      query TEXT,
+      chunk_ids UUID[],
+      confidence NUMERIC,
       created_at TIMESTAMPTZ NOT NULL DEFAULT now()
     );
   `);

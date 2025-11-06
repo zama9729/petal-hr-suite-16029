@@ -1,143 +1,110 @@
-# Quick Start Guide - HR Suite
+# Quick Start Guide - Python RAG Service
 
-Since you built this on Lovable.dev, you'll need to set up Supabase. Here are the **easiest options**:
+## ✅ Status
 
-## Option 1: Create a Free Supabase Project (Recommended - Easiest)
+- **Python RAG Service**: Running on port 8001 ✅
+- **Node.js Backend**: Already configured to use port 8001 ✅
 
-### Step 1: Create Supabase Account & Project
-1. Go to https://supabase.com
-2. Sign up for a free account (if you don't have one)
-3. Click "New Project"
-4. Fill in:
-   - **Name**: HR Suite (or any name)
-   - **Database Password**: Choose a strong password (save it!)
-   - **Region**: Choose closest to you
-5. Wait 2-3 minutes for project to be created
+## Current Status
 
-### Step 2: Get Your Credentials
-1. In your Supabase project dashboard, go to **Settings** → **API**
-2. Copy these two values:
-   - **Project URL** (looks like: `https://xxxxx.supabase.co`)
-   - **anon/public key** (long string starting with `eyJ...`)
-
-### Step 3: Create `.env` File
-Create a file named `.env` in the project root with:
-```env
-VITE_SUPABASE_URL=https://your-project-id.supabase.co
-VITE_SUPABASE_PUBLISHABLE_KEY=your-anon-key-here
+The Python RAG service with tool calling is **running**:
+```json
+{
+  "status": "healthy",
+  "service": "rag-with-tools",
+  "has_openai": false,
+  "tools_available": 5
+}
 ```
 
-Replace with your actual values from Step 2.
+**Note:** `has_openai: false` means tool calling will be limited. Set `OPENAI_API_KEY` for full functionality.
 
-### Step 4: Set Up Database
-You need to run the database migrations. In your Supabase dashboard:
-1. Go to **SQL Editor**
-2. Click **New Query**
-3. Open the file: `supabase/migrations/20251029063529_remix_batch_18_migrations.sql`
-4. Copy all its contents
-5. Paste into the SQL Editor
-6. Click **Run** (or press F5)
+## Starting Services
 
-### Step 5: Run the App
+### 1. Python RAG Service (Port 8001)
 
-**With Docker:**
-```bash
-docker-compose --profile dev up app-dev --build
+The service is currently running. To restart it:
+
+```powershell
+# Activate venv
+.\.rag-venv\Scripts\Activate.ps1
+
+# Set environment variables
+$env:JWT_SECRET_KEY="change-me-dev-only"
+$env:OPENAI_API_KEY="your-openai-key-here"  # Optional but recommended
+
+# Start service (from project root)
+python -m uvicorn rag_service.rag_with_tools:app --host 0.0.0.0 --port 8001
 ```
 
-**Without Docker (using Node.js):**
-```bash
-npm install
+Or use the startup script:
+```powershell
+.\start_rag_service.ps1
+```
+
+### 2. Node.js Backend
+
+The Node.js backend **already defaults to port 8001**, but you can explicitly set it:
+
+```powershell
+# Set environment variables
+$env:RAG_API_URL="http://localhost:8001"  # Already the default
+$env:DB_HOST="localhost"
+$env:DB_PORT="5433"
+$env:DB_NAME="hr_suite"
+$env:DB_USER="postgres"
+$env:DB_PASSWORD="postgres"
+$env:JWT_SECRET_KEY="change-me-dev-only"
+
+# Start backend
+cd server
 npm run dev
 ```
 
-Access at: **http://localhost:8080** (or http://localhost:3000 if using Docker dev)
+## Verify Everything is Working
 
----
+1. **Check Python RAG service:**
+   ```powershell
+   curl http://localhost:8001/health
+   ```
+   Should return: `{"status":"healthy",...}`
 
-## Option 2: Use Lovable's Supabase Connection
+2. **Test in RAG Console:**
+   - Go to RAG Console in the UI
+   - Make a query
+   - Check response for `"source": "python-rag-service-with-tools"`
 
-If your Lovable project is connected to Supabase:
+3. **Check Node backend logs:**
+   - Should see: `[RAG] Using Python RAG`
 
-1. **Log into Lovable.dev**
-2. Go to your project: https://lovable.dev/projects/314472f0-9de3-4bb2-84ca-b26dd53941cc
-3. Check project settings for Supabase connection details
-4. Look for environment variables or API settings
-5. Copy the Supabase URL and key
-6. Create `.env` file with those values
-7. Run the app as shown in Option 1, Step 5
+## Important Notes
 
----
-
-## Option 3: Run Supabase Locally (Advanced)
-
-If you prefer local Supabase:
-
-### Step 1: Install Supabase CLI
-```bash
-npm install -g supabase
-```
-
-### Step 2: Start Local Supabase
-```bash
-supabase start
-```
-
-This will start Supabase in Docker containers automatically.
-
-### Step 3: Get Local Credentials
-```bash
-supabase status
-```
-
-Copy the API URL and anon key from the output.
-
-### Step 4: Create `.env` File
-```env
-VITE_SUPABASE_URL=http://localhost:54321
-VITE_SUPABASE_PUBLISHABLE_KEY=<copy-from-supabase-status>
-```
-
-### Step 5: Run Migrations
-```bash
-supabase db reset
-```
-
-This will run all migrations automatically.
-
-### Step 6: Run the App
-Follow Step 5 from Option 1 above.
-
----
-
-## What You Need
-
-✅ **Supabase URL and Key** - Get from one of the options above
-✅ **Docker** (if using Docker) - Already have it! ✅
-✅ **Node.js** (if not using Docker) - Need to install if you don't have it
-
----
+- **Node.js backend defaults to port 8001** - no changes needed!
+- **Python service is running** - verified via health check
+- **For full tool calling**, set `OPENAI_API_KEY` environment variable
 
 ## Troubleshooting
 
-**"Cannot connect to Supabase"**
-- Check your `.env` file has correct values
-- Make sure there are no spaces around the `=` sign
-- Restart the app after creating/updating `.env`
+### Python service not running
+```powershell
+# Check if it's running
+curl http://localhost:8001/health
 
-**"Database errors"**
-- Make sure you ran the migrations (Option 1, Step 4)
-- Check Supabase project is active (not paused)
+# If not, start it:
+.\.rag-venv\Scripts\Activate.ps1
+$env:JWT_SECRET_KEY="change-me-dev-only"
+python -m uvicorn rag_service.rag_with_tools:app --host 0.0.0.0 --port 8001
+```
 
-**"Port already in use"**
-- Change port in `vite.config.ts` or `docker-compose.yml`
+### Node backend can't connect
+- Make sure Python service is running: `curl http://localhost:8001/health`
+- Verify `RAG_API_URL` is set: `echo $env:RAG_API_URL`
+- Restart Node backend after setting environment variables
 
----
-
-## Next Steps
-
-Once running:
-1. Go to http://localhost:8080
-2. Sign up as a CEO to create your organization
-3. Start using the HR Suite!
-
+### Port 8001 already in use
+```powershell
+# Find process using port 8001
+netstat -ano | findstr ":8001"
+# Kill it (replace <PID> with actual PID)
+taskkill /PID <PID> /F
+```

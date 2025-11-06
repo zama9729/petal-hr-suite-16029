@@ -422,6 +422,53 @@ class ApiClient {
   }
 
   // Workflow runtime
+  async getWorkflows() {
+    return this.request('/api/workflows');
+  }
+
+  async getWorkflow(id: string) {
+    return this.request(`/api/workflows/${id}`);
+  }
+
+  async updateWorkflow(id: string, data: { name?: string; description?: string; status?: string; workflow?: any }) {
+    return this.request(`/api/workflows/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async deleteWorkflow(id: string) {
+    return this.request(`/api/workflows/${id}`, { method: 'DELETE' });
+  }
+
+  // RAG methods
+  async ragUpsert(data: { doc_id: string; text: string; allowed_roles?: string[]; confidentiality_level?: string; pii_flags?: Record<string, any> }) {
+    return this.request('/api/rag/upsert', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async ragIngest(data: { doc_id: string; text: string; allowed_roles?: string[] }) {
+    return this.request('/api/rag/ingest', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async ragQuery(query: string) {
+    return this.request('/api/rag/query', {
+      method: 'POST',
+      body: JSON.stringify({ query }),
+    });
+  }
+
+  async ragGetDocuments() {
+    return this.request('/api/rag/ingest/debug', {
+      method: 'GET',
+    });
+  }
+
   async triggerWorkflow(data: { name?: string; workflow: any; payload?: any }) {
     return this.request('/api/workflows/trigger', { method: 'POST', body: JSON.stringify(data) });
   }

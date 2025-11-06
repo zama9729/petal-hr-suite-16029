@@ -18,6 +18,7 @@ import ShiftManagement from "./pages/ShiftManagement";
 import AIAssistantPage from "./pages/AIAssistantPage";
 import EmployeeImport from "./pages/EmployeeImport";
 import Workflows from "./pages/Workflows";
+import RAGConsole from "./pages/RAGConsole";
 import WorkflowEditor from "./pages/WorkflowEditor";
 import Timesheets from "./pages/Timesheets";
 import TimesheetApprovals from "./pages/TimesheetApprovals";
@@ -73,6 +74,7 @@ const App = () => (
             <Route path="/workflows" element={<ProtectedRoute allowedRoles={['hr', 'director', 'ceo']}><Workflows /></ProtectedRoute>} />
             <Route path="/workflows/new" element={<ProtectedRoute allowedRoles={['hr', 'director', 'ceo']}><WorkflowEditor /></ProtectedRoute>} />
             <Route path="/workflows/:id/edit" element={<ProtectedRoute allowedRoles={['hr', 'director', 'ceo']}><WorkflowEditor /></ProtectedRoute>} />
+            <Route path="/rag" element={<ProtectedRoute allowedRoles={['hr', 'director', 'ceo']}><RAGConsole /></ProtectedRoute>} />
             <Route path="/policies" element={<ProtectedRoute allowedRoles={['hr', 'director', 'ceo']}><LeavePolicies /></ProtectedRoute>} />
             <Route path="/holidays" element={<ProtectedRoute allowedRoles={['hr', 'director', 'ceo']}><HolidayManagement /></ProtectedRoute>} />
             <Route path="/analytics" element={<ProtectedRoute allowedRoles={['hr', 'director', 'ceo']}><Analytics /></ProtectedRoute>} />

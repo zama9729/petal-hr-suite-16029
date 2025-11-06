@@ -10,7 +10,7 @@ services:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
     ports:
-      - "5432:5432"
+      - "5433:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./server/db/full-schema.sql:/docker-entrypoint-initdb.d/01-schema.sql
@@ -41,11 +41,14 @@ services:
     environment:
       - NODE_ENV=development
       - PORT=3001
+      - RAG_API_URL=http://host.docker.internal:8001
       - DB_HOST=postgres
       - DB_PORT=5432
       - DB_NAME=hr_suite
       - DB_USER=postgres
       - DB_PASSWORD=postgres
+      - RAG_API_URL=http://host.docker.internal:8001
+      - JWT_SECRET_KEY=change-me-dev-only
       - JWT_SECRET=your-super-secret-jwt-key-change-in-production
       - REDIS_HOST=redis
       - REDIS_PORT=6379
@@ -58,6 +61,8 @@ services:
     volumes:
       - ./server:/app
       - /app/node_modules
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     restart: unless-stopped
 
   # Frontend application (development)
