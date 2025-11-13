@@ -22,6 +22,8 @@ import {
   Inbox,
   LogOut,
   ClipboardList,
+  LogIn,
+  FileUp,
 } from "lucide-react";
 import { NavLink } from "react-router-dom";
 import {
@@ -39,6 +41,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useEffect, useState } from "react";
 import { api } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
+import { useOrgFeatures } from "@/hooks/useOrgFeatures";
 
 // Navigation items for different roles
 const hrItems = [
@@ -63,10 +66,12 @@ const hrItems = [
   { title: "Project Calendar", url: "/calendar", icon: CalendarClock, showBadge: false },
   { title: "Holiday Management", url: "/holidays", icon: Calendar, showBadge: false },
   { title: "Leave Policies", url: "/policies", icon: FileText, showBadge: false },
+  { title: "Organization Policies", url: "/policies/management", icon: FileText, showBadge: false },
   { title: "Offboarding Policies", url: "/offboarding/policies", icon: ClipboardList, showBadge: false },
   { title: "Analytics", url: "/analytics", icon: BarChart3, showBadge: false },
   { title: "Employee Stats", url: "/employee-stats", icon: Users, showBadge: false },
   { title: "AI Assistant", url: "/ai-assistant", icon: Bot, showBadge: false },
+  { title: "RAG Document Upload", url: "/rag/upload", icon: FileUp, showBadge: false },
   { title: "Payroll", url: "/payroll", icon: DollarSign, showBadge: false, isExternal: true, sso: true },
 ];
 
@@ -102,6 +107,7 @@ const employeeItems = [
 export function AppSidebar() {
   const { user, userRole } = useAuth();
   const { toast } = useToast();
+  const { isClockMode, isTimesheetMode, isLoading: featuresLoading, features } = useOrgFeatures();
   const [pendingCounts, setPendingCounts] = useState<{ timesheets: number; leaves: number }>({
     timesheets: 0,
     leaves: 0,
@@ -180,25 +186,118 @@ export function AppSidebar() {
   
   // Determine which navigation items to show based on role
   const getNavigationItems = () => {
+    let items: any[] = [];
+    
     switch (userRole) {
       case 'ceo':
       case 'director':
       case 'hr':
       case 'admin':
-        return hrItems;
+        items = [...hrItems];
+        break;
       case 'manager':
-        return managerItems;
+        items = [...managerItems];
+        break;
       case 'accountant':
-        return [
+        items = [
           { title: "Dashboard", url: "/dashboard", icon: LayoutDashboard, showBadge: false },
           { title: "Payroll", url: "/payroll", icon: DollarSign, showBadge: false, isExternal: true, sso: true },
           { title: "Attendance Upload", url: "/attendance/upload", icon: Upload, showBadge: false },
           { title: "Upload History", url: "/attendance/history", icon: History, showBadge: false },
         ];
+        break;
       case 'employee':
       default:
-        return employeeItems;
+        items = [...employeeItems];
+        break;
     }
+    
+    // Filter items based on attendance capture method
+    if (!featuresLoading) {
+      if (isClockMode) {
+        // In clock mode: remove timesheet items, add clock in/out and analytics
+        items = items.filter(item => 
+          item.url !== '/timesheets' && 
+          item.url !== '/timesheet-approvals'
+        );
+        // Add Clock In/Out item if not already present
+        if (!items.some(item => item.url === '/clock')) {
+          // Insert after Dashboard or at the beginning
+          const dashboardIndex = items.findIndex(item => item.url === '/dashboard');
+          if (dashboardIndex >= 0) {
+            items.splice(dashboardIndex + 1, 0, {
+              title: "Clock In/Out",
+              url: "/clock",
+              icon: LogIn,
+              showBadge: false,
+            });
+          } else {
+            items.unshift({
+              title: "Clock In/Out",
+              url: "/clock",
+              icon: LogIn,
+              showBadge: false,
+            });
+          }
+        }
+        // Add Attendance Analytics for HR/Manager/Director/CEO
+        const hasAnalytics = items.some(item => item.url === '/attendance/analytics');
+        if (!hasAnalytics && ['hr', 'manager', 'director', 'ceo', 'admin'].includes(userRole?.toLowerCase() || '')) {
+          const clockIndex = items.findIndex(item => item.url === '/clock');
+          if (clockIndex >= 0) {
+            items.splice(clockIndex + 1, 0, {
+              title: "Attendance Analytics",
+              url: "/attendance/analytics",
+              icon: BarChart3,
+              showBadge: false,
+            });
+          } else {
+            items.push({
+              title: "Attendance Analytics",
+              url: "/attendance/analytics",
+              icon: BarChart3,
+              showBadge: false,
+            });
+          }
+        }
+      } else {
+        // In timesheet mode: remove clock in/out and analytics if present
+        items = items.filter(item => 
+          item.url !== '/clock' && 
+          item.url !== '/attendance/analytics'
+        );
+      }
+    }
+
+    const visibilityConfig = features?.role_visibility;
+    if (visibilityConfig && userRole) {
+      const roleKey = userRole.toLowerCase();
+      const roleSettings = visibilityConfig[roleKey] as Record<string, boolean> | undefined;
+      if (roleSettings) {
+        const visibilityMap: Record<string, string> = {
+          '/dashboard': 'dashboard',
+          '/my/profile': 'profile',
+          '/timesheets': 'timesheet',
+          '/timesheet-approvals': 'timesheet',
+          '/clock': 'clock_in_out',
+          '/leaves': 'leaves',
+          '/offboarding/new': 'resign',
+          '/attendance/analytics': 'attendance_analytics',
+        };
+
+        items = items.filter(item => {
+          const key = visibilityMap[item.url];
+          if (!key) {
+            return true;
+          }
+
+          const allowed = roleSettings?.[key];
+          return allowed !== false;
+        });
+      }
+    }
+    
+    return items;
   };
   
   const navigationItems = getNavigationItems();

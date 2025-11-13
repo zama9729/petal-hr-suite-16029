@@ -17,6 +17,7 @@ import Appraisals from "./pages/Appraisals";
 import MyAppraisal from "./pages/MyAppraisal";
 import ShiftManagement from "./pages/ShiftManagement";
 import AIAssistantPage from "./pages/AIAssistantPage";
+import RAGDocumentUpload from "./pages/RAGDocumentUpload";
 import EmployeeImport from "./pages/EmployeeImport";
 import AttendanceUpload from "./pages/AttendanceUpload";
 import AttendanceUploadHistory from "./pages/AttendanceUploadHistory";
@@ -35,6 +36,9 @@ import OrgChart from "./pages/OrgChart";
 import SetupPassword from "./pages/SetupPassword";
 import OnboardingTracker from "./pages/OnboardingTracker";
 import Settings from "./pages/Settings";
+import AttendanceSettings from "./pages/AttendanceSettings";
+import ClockInOut from "./pages/ClockInOut";
+import AttendanceAnalytics from "./pages/AttendanceAnalytics";
 import AdminDashboard from "./pages/AdminDashboard";
 import ProfileSkills from "./pages/ProfileSkills";
 import ProjectNew from "./pages/ProjectNew";
@@ -56,6 +60,8 @@ import OffboardingPolicies from "./pages/OffboardingPolicies";
 import OnboardingEnhanced from "./pages/OnboardingEnhanced";
 import PoliciesManagement from "./pages/PoliciesManagement";
 import PromotionCycles from "./pages/PromotionCycles";
+import OrgSetupSplash from "./pages/OrgSetupSplash";
+import OrgSetupWizard from "./pages/OrgSetupWizard";
 
 const queryClient = new QueryClient();
 
@@ -73,6 +79,10 @@ const App = () => (
             <Route path="/auth/first-time-login" element={<FirstTimeLogin />} />
             <Route path="/auth/first-login" element={<FirstLoginWithToken />} />
             <Route path="/setup-password" element={<SetupPassword />} />
+            
+            {/* Organization Setup routes */}
+            <Route path="/setup-splash" element={<ProtectedRoute><OrgSetupSplash /></ProtectedRoute>} />
+            <Route path="/setup" element={<ProtectedRoute><OrgSetupWizard /></ProtectedRoute>} />
             
             {/* Protected routes */}
             <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
@@ -107,10 +117,14 @@ const App = () => (
             <Route path="/onboarding" element={<ProtectedRoute><Onboarding /></ProtectedRoute>} />
             <Route path="/change-password" element={<ProtectedRoute><ChangePassword /></ProtectedRoute>} />
             <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
+            <Route path="/settings/attendance" element={<ProtectedRoute allowedRoles={['hr', 'director', 'ceo', 'admin']}><AttendanceSettings /></ProtectedRoute>} />
+            <Route path="/clock" element={<ProtectedRoute><ClockInOut /></ProtectedRoute>} />
+            <Route path="/attendance/analytics" element={<ProtectedRoute allowedRoles={['hr', 'manager', 'director', 'ceo', 'admin']}><AttendanceAnalytics /></ProtectedRoute>} />
             <Route path="/appraisals" element={<ProtectedRoute allowedRoles={['manager', 'hr', 'director', 'ceo', 'admin']}><Appraisals /></ProtectedRoute>} />
             <Route path="/my-appraisal" element={<ProtectedRoute><MyAppraisal /></ProtectedRoute>} />
             <Route path="/shifts" element={<ProtectedRoute allowedRoles={['hr', 'director', 'ceo', 'admin']}><ShiftManagement /></ProtectedRoute>} />
             <Route path="/ai-assistant" element={<ProtectedRoute><AIAssistantPage /></ProtectedRoute>} />
+            <Route path="/rag/upload" element={<ProtectedRoute allowedRoles={['hr', 'director', 'ceo', 'admin']}><RAGDocumentUpload /></ProtectedRoute>} />
             <Route path="/attendance/upload" element={<ProtectedRoute allowedRoles={['hr', 'director', 'ceo', 'admin', 'accountant']}><AttendanceUpload /></ProtectedRoute>} />
             <Route path="/attendance/history" element={<ProtectedRoute allowedRoles={['hr', 'director', 'ceo', 'admin', 'accountant']}><AttendanceUploadHistory /></ProtectedRoute>} />
             <Route path="/payroll" element={<ProtectedRoute allowedRoles={['accountant', 'ceo', 'admin']}><Payroll /></ProtectedRoute>} />
