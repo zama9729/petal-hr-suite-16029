@@ -1,0 +1,375 @@
+[1mdiff --git a/repoB/src/lib/api.ts b/src/lib/api.ts[m
+[1mindex 0d06c78..53803f0 100644[m
+[1m--- a/repoB/src/lib/api.ts[m
+[1m+++ b/src/lib/api.ts[m
+[36m@@ -1,6 +1,6 @@[m
+ // API Client - Replaces Supabase client[m
+ [m
+[31m-const API_URL = (import.meta as any).env.VITE_API_URL || 'http://localhost:3001';[m
+[32m+[m[32mconst API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';[m
+ [m
+ class ApiClient {[m
+   private baseURL: string;[m
+[36m@@ -102,29 +102,6 @@[m [mclass ApiClient {[m
+     return result;[m
+   }[m
+ [m
+[31m-  async requestPasswordReset(email: string) {[m
+[31m-    return this.request('/api/auth/forgot-password', {[m
+[31m-      method: 'POST',[m
+[31m-      body: JSON.stringify({ email }),[m
+[31m-    });[m
+[31m-  }[m
+[31m-[m
+[31m-  async getPasswordResetInfo(token: string) {[m
+[31m-    return this.request(`/api/auth/reset-password?token=${encodeURIComponent(token)}`);[m
+[31m-  }[m
+[31m-[m
+[31m-  async resetPassword(data: {[m
+[31m-    token: string;[m
+[31m-    password: string;[m
+[31m-    securityAnswer1?: string;[m
+[31m-    securityAnswer2?: string;[m
+[31m-  }) {[m
+[31m-    return this.request('/api/auth/reset-password', {[m
+[31m-      method: 'POST',[m
+[31m-      body: JSON.stringify(data),[m
+[31m-    });[m
+[31m-  }[m
+[31m-[m
+   // Employee methods[m
+   async getEmployees() {[m
+     return this.request('/api/employees');[m
+[36m@@ -288,6 +265,115 @@[m [mclass ApiClient {[m
+     return this.request('/api/employees/org-chart');[m
+   }[m
+ [m
+[32m+[m[32m  // Policy Templates[m
+[32m+[m[32m  async getPolicyTemplates(country?: string, search?: string) {[m
+[32m+[m[32m    const params = new URLSearchParams();[m
+[32m+[m[32m    if (country) params.append('country', country);[m
+[32m+[m[32m    if (search) params.append('search', search);[m
+[32m+[m[32m    return this.request(`/api/policy-templates?${params.toString()}`);[m
+[32m+[m[32m  }[m
+[32m+[m
+[32m+[m[32m  async getPolicyTemplate(id: string) {[m
+[32m+[m[32m    return this.request(`/api/policy-templates/${id}`);[m
+[32m+[m[32m  }[m
+[32m+[m
+[32m+[m[32m  // Org Policies (new template-based system)[m
+[32m+[m[32m  async getOrgPolicies(status?: string) {[m
+[32m+[m[32m    const params = status ? `?status=${status}` : '';[m
+[32m+[m[32m    return this.request(`/api/org-policies${params}`);[m
+[32m+[m[32m  }[m
+[32m+[m
+[32m+[m[32m  async getOrgPolicy(id: string) {[m
+[32m+[m[32m    return this.request(`/api/org-policies/${id}`);[m
+[32m+[m[32m  }[m
+[32m+[m
+[32m+[m[32m  async createOrgPolicy(data: {[m
+[32m+[m[32m    template_id?: string;[m
+[32m+[m[32m    name: string;[m
+[32m+[m[32m    variables?: Record<string, any>;[m
+[32m+[m[32m  }) {[m
+[32m+[m[32m    return this.request('/api/org-policies', {[m
+[32m+[m[32m      method: 'POST',[m
+[32m+[m[32m      body: JSON.stringify(data),[m
+[32m+[m[32m    });[m
+[32m+[m[32m  }[m
+[32m+[m
+[32m+[m[32m  async updateOrgPolicy(id: string, data: {[m
+[32m+[m[32m    name?: string;[m
+[32m+[m[32m    status?: string;[m
+[32m+[m[32m  }) {[m
+[32m+[m[32m    return this.request(`/api/org-policies/${id}`, {[m
+[32m+[m[32m      method: 'PATCH',[m
+[32m+[m[32m      body: JSON.stringify(data),[m
+[32m+[m[32m    });[m
+[32m+[m[32m  }[m
+[32m+[m
+[32m+[m[32m  async publishOrgPolicy(id: string, data: {[m
+[32m+[m[32m    sections?: any;[m
+[32m+[m[32m    variables?: Record<string, any>;[m
+[32m+[m[32m    legal_refs?: any;[m
+[32m+[m[32m    effective_from?: string;[m
+[32m+[m[32m  }) {[m
+[32m+[m[32m    return this.request(`/api/org-policies/${id}/publish`, {[m
+[32m+[m[32m      method: 'POST',[m
+[32m+[m[32m      body: JSON.stringify(data),[m
+[32m+[m[32m    });[m
+[32m+[m[32m  }[m
+[32m+[m
+[32m+[m[32m  // Holiday Calendars[m
+[32m+[m[32m  async getHolidayCalendars() {[m
+[32m+[m[32m    return this.request('/api/holiday-calendars');[m
+[32m+[m[32m  }[m
+[32m+[m
+[32m+[m[32m  async createHolidayCalendar(data: {[m
+[32m+[m[32m    name: string;[m
+[32m+[m[32m    region_code: string;[m
+[32m+[m[32m    rules?: Record<string, any>;[m
+[32m+[m[32m  }) {[m
+[32m+[m[32m    return this.request('/api/holiday-calendars', {[m
+[32m+[m[32m      method: 'POST',[m
+[32m+[m[32m      body: JSON.stringify(data),[m
+[32m+[m[32m    });[m
+[32m+[m[32m  }[m
+[32m+[m
+[32m+[m[32m  // Pay Groups[m
+[32m+[m[32m  async getPayGroups() {[m
+[32m+[m[32m    return this.request('/api/pay-groups');[m
+[32m+[m[32m  }[m
+[32m+[m
+[32m+[m[32m  async createPayGroup(data: {[m
+[32m+[m[32m    name: string;[m
+[32m+[m[32m    cycle: 'monthly' | 'bi-weekly' | 'weekly';[m
+[32m+[m[32m    currency?: string;[m
+[32m+[m[32m    proration_rule?: Record<string, any>;[m
+[32m+[m[32m  }) {[m
+[32m+[m[32m    return this.request('/api/pay-groups', {[m
+[32m+[m[32m      method: 'POST',[m
+[32m+[m[32m      body: JSON.stringify(data),[m
+[32m+[m[32m    });[m
+[32m+[m[32m  }[m
+[32m+[m
+[32m+[m[32m  // Employee Transfers[m
+[32m+[m[32m  async transferEmployee(data: {[m
+[32m+[m[32m    user_id: string;[m
+[32m+[m[32m    new_branch_id?: string;[m
+[32m+[m[32m    new_department_id?: string;[m
+[32m+[m[32m    new_team_id?: string;[m
+[32m+[m[32m    new_role?: string;[m
+[32m+[m[32m    new_fte?: number;[m
+[32m+[m[32m    effective_date: string;[m
+[32m+[m[32m    transfer_reason?: string;[m
+[32m+[m[32m  }) {[m
+[32m+[m[32m    return this.request('/api/employee-transfers', {[m
+[32m+[m[32m      method: 'POST',[m
+[32m+[m[32m      body: JSON.stringify(data),[m
+[32m+[m[32m    });[m
+[32m+[m[32m  }[m
+[32m+[m
+[32m+[m[32m  async getEmployeeTransferHistory(userId: string) {[m
+[32m+[m[32m    return this.request(`/api/employee-transfers/${userId}/history`);[m
+[32m+[m[32m  }[m
+[32m+[m
+   // Shift methods[m
+   async getShifts() {[m
+     return this.request('/api/shifts');[m
+[36m@@ -822,6 +908,84 @@[m [mclass ApiClient {[m
+     });[m
+   }[m
+ [m
+[32m+[m[32m  // Organization Features methods[m
+[32m+[m[32m  async getOrgFeatures() {[m
+[32m+[m[32m    return this.request('/api/org/features');[m
+[32m+[m[32m  }[m
+[32m+[m
+[32m+[m[32m  async getOrgFeature(key: string) {[m
+[32m+[m[32m    return this.request(`/api/org/features/${key}`);[m
+[32m+[m[32m  }[m
+[32m+[m
+[32m+[m[32m  async updateOrgFeatures(features: Record<string, any>) {[m
+[32m+[m[32m    return this.request('/api/org/features', {[m
+[32m+[m[32m      method: 'PUT',[m
+[32m+[m[32m      body: JSON.stringify({ features }),[m
+[32m+[m[32m    });[m
+[32m+[m[32m  }[m
+[32m+[m
+[32m+[m[32m  async getAttendanceCaptureMethod() {[m
+[32m+[m[32m    return this.request('/api/org/features/attendance-capture/method');[m
+[32m+[m[32m  }[m
+[32m+[m
+[32m+[m[32m  async setAttendanceCaptureMethod(method: 'timesheet' | 'clock') {[m
+[32m+[m[32m    return this.request('/api/org/features/attendance-capture', {[m
+[32m+[m[32m      method: 'PUT',[m
+[32m+[m[32m      body: JSON.stringify({ method }),[m
+[32m+[m[32m    });[m
+[32m+[m[32m  }[m
+[32m+[m
+[32m+[m[32m  // Clock Attendance methods[m
+[32m+[m[32m  async clockIn() {[m
+[32m+[m[32m    return this.request('/api/clock/in', {[m
+[32m+[m[32m      method: 'POST',[m
+[32m+[m[32m    });[m
+[32m+[m[32m  }[m
+[32m+[m
+[32m+[m[32m  async clockOut() {[m
+[32m+[m[32m    return this.request('/api/clock/out', {[m
+[32m+[m[32m      method: 'POST',[m
+[32m+[m[32m    });[m
+[32m+[m[32m  }[m
+[32m+[m
+[32m+[m[32m  async getClockStatus() {[m
+[32m+[m[32m    return this.request('/api/clock/status');[m
+[32m+[m[32m  }[m
+[32m+[m
+[32m+[m[32m  async getTodayClockEvents() {[m
+[32m+[m[32m    return this.request('/api/clock/today');[m
+[32m+[m[32m  }[m
+[32m+[m
+[32m+[m[32m  async getClockSummary(startDate: string, endDate: string) {[m
+[32m+[m[32m    return this.request(`/api/clock/summary?start_date=${startDate}&end_date=${endDate}`);[m
+[32m+[m[32m  }[m
+[32m+[m
+[32m+[m[32m  // Attendance Analytics methods[m
+[32m+[m[32m  async getAttendanceSummary(startDate: string, endDate: string, userId?: string) {[m
+[32m+[m[32m    const url = userId[m
+[32m+[m[32m      ? `/api/attendance-analytics/summary?start_date=${startDate}&end_date=${endDate}&user_id=${userId}`[m
+[32m+[m[32m      : `/api/attendance-analytics/summary?start_date=${startDate}&end_date=${endDate}`;[m
+[32m+[m[32m    return this.request(url);[m
+[32m+[m[32m  }[m
+[32m+[m
+[32m+[m[32m  async getAttendancePatterns(startDate: string, endDate: string, userId?: string, expectedStartTime?: string) {[m
+[32m+[m[32m    let url = `/api/attendance-analytics/patterns?start_date=${startDate}&end_date=${endDate}`;[m
+[32m+[m[32m    if (userId) url += `&user_id=${userId}`;[m
+[32m+[m[32m    if (expectedStartTime) url += `&expected_start_time=${expectedStartTime}`;[m
+[32m+[m[32m    return this.request(url);[m
+[32m+[m[32m  }[m
+[32m+[m
+[32m+[m[32m  async getTeamSummary(startDate: string, endDate: string) {[m
+[32m+[m[32m    return this.request(`/api/attendance-analytics/team-summary?start_date=${startDate}&end_date=${endDate}`);[m
+[32m+[m[32m  }[m
+[32m+[m
+[32m+[m[32m  async getHourlyDistribution(startDate: string, endDate: string, userId?: string) {[m
+[32m+[m[32m    const url = userId[m
+[32m+[m[32m      ? `/api/attendance-analytics/hourly-distribution?start_date=${startDate}&end_date=${endDate}&user_id=${userId}`[m
+[32m+[m[32m      : `/api/attendance-analytics/hourly-distribution?start_date=${startDate}&end_date=${endDate}`;[m
+[32m+[m[32m    return this.request(url);[m
+[32m+[m[32m  }[m
+[32m+[m
+   async createRehireRequest(data: {[m
+     offboarded_identity_id: string;[m
+     manager_id?: string;[m
+[36m@@ -864,14 +1028,15 @@[m [mclass ApiClient {[m
+     return this.request('/api/policies/catalog');[m
+   }[m
+ [m
+[31m-  async getOrgPolicies(date?: string) {[m
+[32m+[m[32m  // Old policy system endpoint (deprecated - use getOrgPolicies from template-based system above)[m
+[32m+[m[32m  async getOrgPoliciesOld(date?: string) {[m
+     const url = date [m
+       ? `/api/policies/org?date=${date}`[m
+       : '/api/policies/org';[m
+     return this.request(url);[m
+   }[m
+ [m
+[31m-  async createOrgPolicy(data: {[m
+[32m+[m[32m  async createOrgPolicyOld(data: {[m
+     policy_key: string;[m
+     value: any;[m
+     effective_from?: string;[m
+[36m@@ -977,130 +1142,253 @@[m [mclass ApiClient {[m
+     return this.request('/api/payroll/sso');[m
+   }[m
+ [m
+[31m-  async getPayrollRuns(params?: { status?: string; limit?: number; offset?: number }) {[m
+[31m-    const searchParams = new URLSearchParams();[m
+[31m-    if (params?.status) searchParams.append('status', params.status);[m
+[31m-    if (params?.limit) searchParams.append('limit', params.limit.toString());[m
+[31m-    if (params?.offset) searchParams.append('offset', params.offset.toString());[m
+[31m-    const query = searchParams.toString() ? `?${searchParams.toString()}` : '';[m
+[31m-    return this.request(`/api/payroll/runs${query}`);[m
+[32m+[m[32m  // RAG Service methods[m
+[32m+[m[32m  async queryRAG(query: string, top_k?: number, use_tools: boolean = true) {[m
+[32m+[m[32m    const RAG_API_URL = import.meta.env.VITE_RAG_API_URL || 'http://localhost:8001';[m
+[32m+[m[32m    const token = this._token || localStorage.getItem('auth_token');[m
+[32m+[m
+[32m+[m[32m    const response = await fetch(`${RAG_API_URL}/api/v1/query`, {[m
+[32m+[m[32m      method: 'POST',[m
+[32m+[m[32m      headers: {[m
+[32m+[m[32m        'Content-Type': 'application/json',[m
+[32m+[m[32m        'Authorization': `Bearer ${token || ''}`,[m
+[32m+[m[32m      },[m
+[32m+[m[32m      body: JSON.stringify({ query, top_k, use_tools }),[m
+[32m+[m[32m    });[m
+[32m+[m
+[32m+[m[32m    if (!response.ok) {[m
+[32m+[m[32m      const error = await response.json().catch(() => ({ error: 'Request failed' }));[m
+[32m+[m[32m      throw new Error(error.error || `HTTP error! status: ${response.status}`);[m
+[32m+[m[32m    }[m
+[32m+[m
+[32m+[m[32m    return response.json();[m
+   }[m
+ [m
+[31m-  async getPayrollRunAdjustments(runId: string) {[m
+[31m-    return this.request(`/api/payroll/runs/${runId}/adjustments`);[m
+[32m+[m[32m  async ingestDocument(file: File, isConfidential: boolean = false) {[m
+[32m+[m[32m    const RAG_API_URL = import.meta.env.VITE_RAG_API_URL || 'http://localhost:8001';[m
+[32m+[m[32m    const token = this._token || localStorage.getItem('auth_token');[m
+[32m+[m
+[32m+[m[32m    const formData = new FormData();[m
+[32m+[m[32m    formData.append('file', file);[m
+[32m+[m[32m    formData.append('is_confidential', String(isConfidential));[m
+[32m+[m
+[32m+[m[32m    const response = await fetch(`${RAG_API_URL}/api/v1/ingest`, {[m
+[32m+[m[32m      method: 'POST',[m
+[32m+[m[32m      headers: {[m
+[32m+[m[32m        'Authorization': `Bearer ${token || ''}`,[m
+[32m+[m[32m      },[m
+[32m+[m[32m      body: formData,[m
+[32m+[m[32m    });[m
+[32m+[m
+[32m+[m[32m    if (!response.ok) {[m
+[32m+[m[32m      const error = await response.json().catch(() => ({ error: 'Request failed' }));[m
+[32m+[m[32m      throw new Error(error.error || `HTTP error! status: ${response.status}`);[m
+[32m+[m[32m    }[m
+[32m+[m
+[32m+[m[32m    return response.json();[m
+   }[m
+ [m
+[31m-  async createPayrollRunAdjustment(runId: string, data: {[m
+[31m-    employee_id: string;[m
+[31m-    component_name: string;[m
+[31m-    amount: number;[m
+[31m-    is_taxable?: boolean;[m
+[31m-    notes?: string;[m
+[31m-  }) {[m
+[31m-    return this.request(`/api/payroll/runs/${runId}/adjustments`, {[m
+[32m+[m[32m  async getRAGAuditLogs(limit: number = 100) {[m
+[32m+[m[32m    const RAG_API_URL = import.meta.env.VITE_RAG_API_URL || 'http://localhost:8001';[m
+[32m+[m[32m    const token = this._token || localStorage.getItem('auth_token');[m
+[32m+[m
+[32m+[m[32m    const response = await fetch(`${RAG_API_URL}/api/v1/audit?limit=${limit}`, {[m
+[32m+[m[32m      headers: {[m
+[32m+[m[32m        'Authorization': `Bearer ${token || ''}`,[m
+[32m+[m[32m      },[m
+[32m+[m[32m    });[m
+[32m+[m
+[32m+[m[32m    if (!response.ok) {[m
+[32m+[m[32m      const error = await response.json().catch(() => ({ error: 'Request failed' }));[m
+[32m+[m[32m      throw new Error(error.error || `HTTP error! status: ${response.status}`);[m
+[32m+[m[32m    }[m
+[32m+[m
+[32m+[m[32m    return response.json();[m
+[32m+[m[32m  }[m
+[32m+[m
+[32m+[m[32m  async getRAGDocumentStatus(documentId: string) {[m
+[32m+[m[32m    const RAG_API_URL = import.meta.env.VITE_RAG_API_URL || 'http://localhost:8001';[m
+[32m+[m[32m    const token = this._token || localStorage.getItem('auth_token');[m
+[32m+[m
+[32m+[m[32m    const response = await fetch(`${RAG_API_URL}/api/v1/documents/${documentId}/status`, {[m
+[32m+[m[32m      headers: {[m
+[32m+[m[32m        'Authorization': `Bearer ${token || ''}`,[m
+[32m+[m[32m      },[m
+[32m+[m[32m    });[m
+[32m+[m
+[32m+[m[32m    if (!response.ok) {[m
+[32m+[m[32m      const error = await response.json().catch(() => ({ error: 'Request failed' }));[m
+[32m+[m[32m      throw new Error(error.error || `HTTP error! status: ${response.status}`);[m
+[32m+[m[32m    }[m
+[32m+[m
+[32m+[m[32m    return response.json();[m
+[32m+[m[32m  }[m
+[32m+[m
+[32m+[m[32m  async getRAGDocumentProgress(documentId: string) {[m
+[32m+[m[32m    const RAG_API_URL = import.meta.env.VITE_RAG_API_URL || 'http://localhost:8001';[m
+[32m+[m[32m    const token = this._token || localStorage.getItem('auth_token');[m
+[32m+[m
+[32m+[m[32m    const response = await fetch(`${RAG_API_URL}/api/v1/documents/${documentId}/progress`, {[m
+[32m+[m[32m      headers: {[m
+[32m+[m[32m        'Authorization': `Bearer ${token || ''}`,[m
+[32m+[m[32m      },[m
+[32m+[m[32m    });[m
+[32m+[m
+[32m+[m[32m

@@ -1,6 +1,6 @@
 // API Client - Replaces Supabase client
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+const API_URL = (import.meta as any).env.VITE_API_URL || 'http://localhost:3001';
 
 class ApiClient {
   private baseURL: string;
@@ -100,6 +100,29 @@ class ApiClient {
       this.setToken(result.token);
     }
     return result;
+  }
+
+  async requestPasswordReset(email: string) {
+    return this.request('/api/auth/forgot-password', {
+      method: 'POST',
+      body: JSON.stringify({ email }),
+    });
+  }
+
+  async getPasswordResetInfo(token: string) {
+    return this.request(`/api/auth/reset-password?token=${encodeURIComponent(token)}`);
+  }
+
+  async resetPassword(data: {
+    token: string;
+    password: string;
+    securityAnswer1?: string;
+    securityAnswer2?: string;
+  }) {
+    return this.request('/api/auth/reset-password', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
   }
 
   // Employee methods
@@ -263,115 +286,6 @@ class ApiClient {
   // Org chart methods
   async getOrgStructure() {
     return this.request('/api/employees/org-chart');
-  }
-
-  // Policy Templates
-  async getPolicyTemplates(country?: string, search?: string) {
-    const params = new URLSearchParams();
-    if (country) params.append('country', country);
-    if (search) params.append('search', search);
-    return this.request(`/api/policy-templates?${params.toString()}`);
-  }
-
-  async getPolicyTemplate(id: string) {
-    return this.request(`/api/policy-templates/${id}`);
-  }
-
-  // Org Policies (new template-based system)
-  async getOrgPolicies(status?: string) {
-    const params = status ? `?status=${status}` : '';
-    return this.request(`/api/org-policies${params}`);
-  }
-
-  async getOrgPolicy(id: string) {
-    return this.request(`/api/org-policies/${id}`);
-  }
-
-  async createOrgPolicy(data: {
-    template_id?: string;
-    name: string;
-    variables?: Record<string, any>;
-  }) {
-    return this.request('/api/org-policies', {
-      method: 'POST',
-      body: JSON.stringify(data),
-    });
-  }
-
-  async updateOrgPolicy(id: string, data: {
-    name?: string;
-    status?: string;
-  }) {
-    return this.request(`/api/org-policies/${id}`, {
-      method: 'PATCH',
-      body: JSON.stringify(data),
-    });
-  }
-
-  async publishOrgPolicy(id: string, data: {
-    sections?: any;
-    variables?: Record<string, any>;
-    legal_refs?: any;
-    effective_from?: string;
-  }) {
-    return this.request(`/api/org-policies/${id}/publish`, {
-      method: 'POST',
-      body: JSON.stringify(data),
-    });
-  }
-
-  // Holiday Calendars
-  async getHolidayCalendars() {
-    return this.request('/api/holiday-calendars');
-  }
-
-  async createHolidayCalendar(data: {
-    name: string;
-    region_code: string;
-    rules?: Record<string, any>;
-  }) {
-    return this.request('/api/holiday-calendars', {
-      method: 'POST',
-      body: JSON.stringify(data),
-    });
-  }
-
-  // Pay Groups
-  async getPayGroups() {
-    return this.request('/api/pay-groups');
-  }
-
-  async createPayGroup(data: {
-    name: string;
-    cycle: 'monthly' | 'bi-weekly' | 'weekly';
-    currency?: string;
-    proration_rule?: Record<string, any>;
-  }) {
-    return this.request('/api/pay-groups', {
-      method: 'POST',
-      body: JSON.stringify(data),
-    });
-  }
-
-  // Employee Transfers
-  async transferEmployee(data: {
-    user_id: string;
-    new_branch_id?: string;
-    new_department_id?: string;
-    new_team_id?: string;
-    new_role?: string;
-    new_fte?: number;
-    effective_date: string;
-    transfer_reason?: string;
-  }) {
-    return this.request('/api/employee-transfers', {
-      method: 'POST',
-      body: JSON.stringify(data),
-    });
-  }
-
-  async getEmployeeTransferHistory(userId: string) {
-    return this.request(`/api/employee-transfers/${userId}/history`);
   }
 
   // Shift methods
@@ -908,84 +822,6 @@ class ApiClient {
     });
   }
 
-  // Organization Features methods
-  async getOrgFeatures() {
-    return this.request('/api/org/features');
-  }
-
-  async getOrgFeature(key: string) {
-    return this.request(`/api/org/features/${key}`);
-  }
-
-  async updateOrgFeatures(features: Record<string, any>) {
-    return this.request('/api/org/features', {
-      method: 'PUT',
-      body: JSON.stringify({ features }),
-    });
-  }
-
-  async getAttendanceCaptureMethod() {
-    return this.request('/api/org/features/attendance-capture/method');
-  }
-
-  async setAttendanceCaptureMethod(method: 'timesheet' | 'clock') {
-    return this.request('/api/org/features/attendance-capture', {
-      method: 'PUT',
-      body: JSON.stringify({ method }),
-    });
-  }
-
-  // Clock Attendance methods
-  async clockIn() {
-    return this.request('/api/clock/in', {
-      method: 'POST',
-    });
-  }
-
-  async clockOut() {
-    return this.request('/api/clock/out', {
-      method: 'POST',
-    });
-  }
-
-  async getClockStatus() {
-    return this.request('/api/clock/status');
-  }
-
-  async getTodayClockEvents() {
-    return this.request('/api/clock/today');
-  }
-
-  async getClockSummary(startDate: string, endDate: string) {
-    return this.request(`/api/clock/summary?start_date=${startDate}&end_date=${endDate}`);
-  }
-
-  // Attendance Analytics methods
-  async getAttendanceSummary(startDate: string, endDate: string, userId?: string) {
-    const url = userId
-      ? `/api/attendance-analytics/summary?start_date=${startDate}&end_date=${endDate}&user_id=${userId}`
-      : `/api/attendance-analytics/summary?start_date=${startDate}&end_date=${endDate}`;
-    return this.request(url);
-  }
-
-  async getAttendancePatterns(startDate: string, endDate: string, userId?: string, expectedStartTime?: string) {
-    let url = `/api/attendance-analytics/patterns?start_date=${startDate}&end_date=${endDate}`;
-    if (userId) url += `&user_id=${userId}`;
-    if (expectedStartTime) url += `&expected_start_time=${expectedStartTime}`;
-    return this.request(url);
-  }
-
-  async getTeamSummary(startDate: string, endDate: string) {
-    return this.request(`/api/attendance-analytics/team-summary?start_date=${startDate}&end_date=${endDate}`);
-  }
-
-  async getHourlyDistribution(startDate: string, endDate: string, userId?: string) {
-    const url = userId
-      ? `/api/attendance-analytics/hourly-distribution?start_date=${startDate}&end_date=${endDate}&user_id=${userId}`
-      : `/api/attendance-analytics/hourly-distribution?start_date=${startDate}&end_date=${endDate}`;
-    return this.request(url);
-  }
-
   async createRehireRequest(data: {
     offboarded_identity_id: string;
     manager_id?: string;
@@ -1028,15 +864,14 @@ class ApiClient {
     return this.request('/api/policies/catalog');
   }
 
-  // Old policy system endpoint (deprecated - use getOrgPolicies from template-based system above)
-  async getOrgPoliciesOld(date?: string) {
+  async getOrgPolicies(date?: string) {
     const url = date 
       ? `/api/policies/org?date=${date}`
       : '/api/policies/org';
     return this.request(url);
   }
 
-  async createOrgPolicyOld(data: {
+  async createOrgPolicy(data: {
     policy_key: string;
     value: any;
     effective_from?: string;
@@ -1142,253 +977,130 @@ class ApiClient {
     return this.request('/api/payroll/sso');
   }
 
-  // RAG Service methods
-  async queryRAG(query: string, top_k?: number, use_tools: boolean = true) {
-    const RAG_API_URL = import.meta.env.VITE_RAG_API_URL || 'http://localhost:8001';
-    const token = this._token || localStorage.getItem('auth_token');
-
-    const response = await fetch(`${RAG_API_URL}/api/v1/query`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token || ''}`,
-      },
-      body: JSON.stringify({ query, top_k, use_tools }),
-    });
-
-    if (!response.ok) {
-      const error = await response.json().catch(() => ({ error: 'Request failed' }));
-      throw new Error(error.error || `HTTP error! status: ${response.status}`);
-    }
-
-    return response.json();
+  async getPayrollRuns(params?: { status?: string; limit?: number; offset?: number }) {
+    const searchParams = new URLSearchParams();
+    if (params?.status) searchParams.append('status', params.status);
+    if (params?.limit) searchParams.append('limit', params.limit.toString());
+    if (params?.offset) searchParams.append('offset', params.offset.toString());
+    const query = searchParams.toString() ? `?${searchParams.toString()}` : '';
+    return this.request(`/api/payroll/runs${query}`);
   }
 
-  async ingestDocument(file: File, isConfidential: boolean = false) {
-    const RAG_API_URL = import.meta.env.VITE_RAG_API_URL || 'http://localhost:8001';
-    const token = this._token || localStorage.getItem('auth_token');
+  async getPayrollRunAdjustments(runId: string) {
+    return this.request(`/api/payroll/runs/${runId}/adjustments`);
+  }
 
+  async createPayrollRunAdjustment(runId: string, data: {
+    employee_id: string;
+    component_name: string;
+    amount: number;
+    is_taxable?: boolean;
+    notes?: string;
+  }) {
+    return this.request(`/api/payroll/runs/${runId}/adjustments`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async updatePayrollRunAdjustment(adjustmentId: string, data: {
+    component_name?: string;
+    amount?: number;
+    is_taxable?: boolean;
+    notes?: string;
+  }) {
+    return this.request(`/api/payroll/adjustments/${adjustmentId}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async deletePayrollRunAdjustment(adjustmentId: string) {
+    return this.request(`/api/payroll/adjustments/${adjustmentId}`, {
+      method: 'DELETE',
+    });
+  }
+
+  async getTaxDefinitions(financialYear: string) {
+    return this.request(`/api/tax/declarations/definitions?financial_year=${encodeURIComponent(financialYear)}`);
+  }
+
+  async getMyTaxDeclaration(financialYear: string) {
+    return this.request(`/api/tax/declarations/me?financial_year=${encodeURIComponent(financialYear)}`);
+  }
+
+  async saveTaxDeclaration(data: {
+    financial_year: string;
+    chosen_regime: 'old' | 'new';
+    status: 'draft' | 'submitted';
+    items: Array<{
+      component_id: string;
+      declared_amount: number;
+      proof_url?: string;
+      notes?: string;
+    }>;
+  }) {
+    return this.request('/api/tax/declarations', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async uploadTaxProof(params: { componentId: string; financialYear: string; file: File }) {
     const formData = new FormData();
-    formData.append('file', file);
-    formData.append('is_confidential', String(isConfidential));
+    formData.append('component_id', params.componentId);
+    formData.append('financial_year', params.financialYear);
+    formData.append('file', params.file);
 
-    const response = await fetch(`${RAG_API_URL}/api/v1/ingest`, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${token || ''}`,
+    return this.request(
+      '/api/tax/declarations/proofs',
+      {
+        method: 'POST',
+        body: formData,
+        headers: {} as HeadersInit,
       },
-      body: formData,
-    });
+      true,
+    );
+  }
 
-    if (!response.ok) {
-      const error = await response.json().catch(() => ({ error: 'Request failed' }));
-      throw new Error(error.error || `HTTP error! status: ${response.status}`);
+  async getTaxDeclarations(params?: { financial_year?: string; status?: string }) {
+    const searchParams = new URLSearchParams();
+    if (params?.financial_year) searchParams.append('financial_year', params.financial_year);
+    if (params?.status) searchParams.append('status', params.status);
+    const queryString = searchParams.toString() ? `?${searchParams.toString()}` : '';
+    return this.request(`/api/tax/declarations${queryString}`);
+  }
+
+  async reviewTaxDeclaration(
+    declarationId: string,
+    data: {
+      status: 'approved' | 'rejected';
+      items?: Array<{ id: string; approved_amount?: number; notes?: string }>;
+      remarks?: string;
     }
-
-    return response.json();
-  }
-
-  async getRAGAuditLogs(limit: number = 100) {
-    const RAG_API_URL = import.meta.env.VITE_RAG_API_URL || 'http://localhost:8001';
-    const token = this._token || localStorage.getItem('auth_token');
-
-    const response = await fetch(`${RAG_API_URL}/api/v1/audit?limit=${limit}`, {
-      headers: {
-        'Authorization': `Bearer ${token || ''}`,
-      },
-    });
-
-    if (!response.ok) {
-      const error = await response.json().catch(() => ({ error: 'Request failed' }));
-      throw new Error(error.error || `HTTP error! status: ${response.status}`);
-    }
-
-    return response.json();
-  }
-
-  async getRAGDocumentStatus(documentId: string) {
-    const RAG_API_URL = import.meta.env.VITE_RAG_API_URL || 'http://localhost:8001';
-    const token = this._token || localStorage.getItem('auth_token');
-
-    const response = await fetch(`${RAG_API_URL}/api/v1/documents/${documentId}/status`, {
-      headers: {
-        'Authorization': `Bearer ${token || ''}`,
-      },
-    });
-
-    if (!response.ok) {
-      const error = await response.json().catch(() => ({ error: 'Request failed' }));
-      throw new Error(error.error || `HTTP error! status: ${response.status}`);
-    }
-
-    return response.json();
-  }
-
-  async getRAGDocumentProgress(documentId: string) {
-    const RAG_API_URL = import.meta.env.VITE_RAG_API_URL || 'http://localhost:8001';
-    const token = this._token || localStorage.getItem('auth_token');
-
-    const response = await fetch(`${RAG_API_URL}/api/v1/documents/${documentId}/progress`, {
-      headers: {
-        'Authorization': `Bearer ${token || ''}`,
-      },
-    });
-
-    if (!response.ok) {
-      const error = await response.json().catch(() => ({ error: 'Request failed' }));
-      throw new Error(error.error || `HTTP error! status: ${response.status}`);
-    }
-
-    return response.json();
-  }
-
-  async listRAGDocuments(limit: number = 50) {
-    const RAG_API_URL = import.meta.env.VITE_RAG_API_URL || 'http://localhost:8001';
-    const token = this._token || localStorage.getItem('auth_token');
-
-    const response = await fetch(`${RAG_API_URL}/api/v1/documents?limit=${limit}`, {
-      headers: {
-        'Authorization': `Bearer ${token || ''}`,
-      },
-    });
-
-    if (!response.ok) {
-      const error = await response.json().catch(() => ({ error: 'Request failed' }));
-      throw new Error(error.error || `HTTP error! status: ${response.status}`);
-    }
-
-    return response.json();
-  }
-
-  async reprocessRAGDocument(documentId: string) {
-    const RAG_API_URL = import.meta.env.VITE_RAG_API_URL || 'http://localhost:8001';
-    const token = this._token || localStorage.getItem('auth_token');
-
-    const response = await fetch(`${RAG_API_URL}/api/v1/documents/${documentId}/reprocess`, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${token || ''}`,
-      },
-    });
-
-    if (!response.ok) {
-      const error = await response.json().catch(() => ({ error: 'Request failed' }));
-      throw new Error(error.error || `HTTP error! status: ${response.status}`);
-    }
-
-    return response.json();
-  }
-
-  // Organization Setup methods
-  async getOrgSetupStatus() {
-    return this.request('/api/org-setup/status');
-  }
-
-  async updateOrgSetupStep(stepNumber: number, data: any, completed: boolean = false) {
-    return this.request(`/api/org-setup/step/${stepNumber}`, {
-      method: 'PUT',
-      body: JSON.stringify({ data, completed }),
-    });
-  }
-
-  async updateOrgDetails(data: {
-    legal_name?: string;
-    primary_domain?: string;
-    hq_address_line1?: string;
-    hq_address_line2?: string;
-    hq_city?: string;
-    hq_state?: string;
-    hq_postal_code?: string;
-    hq_country?: string;
-    contact_phone?: string;
-    contact_email?: string;
-  }) {
-    return this.request('/api/org-setup/details', {
-      method: 'PUT',
-      body: JSON.stringify(data),
-    });
-  }
-
-  async getOrgDetails() {
-    return this.request('/api/org-setup/details');
-  }
-
-  async getOrgBranches() {
-    return this.request('/api/branches');
-  }
-
-  async getDepartments() {
-    return this.request('/api/departments');
-  }
-
-  async createDepartment(data: {
-    name: string;
-    branch_id?: string;
-  }) {
-    return this.request('/api/departments', {
+  ) {
+    return this.request(`/api/tax/declarations/${declarationId}/review`, {
       method: 'POST',
       body: JSON.stringify(data),
     });
   }
 
-  async deleteDepartment(id: string) {
-    return this.request(`/api/departments/${id}`, {
-      method: 'DELETE',
-    });
-  }
-
-  async createOrgBranch(data: {
-    name: string;
-    code?: string;
-    timezone?: string;
-    holiday_calendar_id?: string;
-    pay_group_id?: string;
-    address_line1?: string;
-    address_line2?: string;
-    city?: string;
-    state?: string;
-    postal_code?: string;
-    country?: string;
-    phone?: string;
-    email?: string;
-    is_headquarters?: boolean;
-    active?: boolean;
-  }) {
-    return this.request('/api/org-setup/branches', {
-      method: 'POST',
-      body: JSON.stringify(data),
-    });
-  }
-
-  async deleteOrgBranch(id: string) {
-    return this.request(`/api/org-setup/branches/${id}`, {
-      method: 'DELETE',
-    });
-  }
-
-  async updateAttendanceCaptureMethod(method: 'timesheet' | 'clock') {
-    return this.request('/api/org-setup/attendance-capture', {
-      method: 'PUT',
-      body: JSON.stringify({ method }),
-    });
-  }
-
-  async markPoliciesStepCompleted() {
-    return this.request('/api/org-setup/policies', {
-      method: 'PUT',
-    });
-  }
-
-  async markEmployeesImportStepCompleted() {
-    return this.request('/api/org-setup/employees-import', {
-      method: 'PUT',
-    });
-  }
-
-  async completeOrgSetup() {
-    return this.request('/api/org-setup/complete', {
-      method: 'POST',
-    });
+  async downloadForm16(financialYear: string, employeeId?: string) {
+    const params = new URLSearchParams();
+    params.append('financial_year', financialYear);
+    if (employeeId) {
+      params.append('employee_id', employeeId);
+    }
+    const url = `${this.baseURL}/api/reports/form16?${params.toString()}`;
+    const headers: HeadersInit = {};
+    if (this._token) {
+      headers['Authorization'] = `Bearer ${this._token}`;
+    }
+    const response = await fetch(url, { headers });
+    if (!response.ok) {
+      throw new Error('Failed to download Form 16');
+    }
+    return response.blob();
   }
 }
 

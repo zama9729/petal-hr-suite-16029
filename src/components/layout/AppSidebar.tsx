@@ -22,8 +22,7 @@ import {
   Inbox,
   LogOut,
   ClipboardList,
-  LogIn,
-  FileUp,
+  Receipt,
 } from "lucide-react";
 import { NavLink } from "react-router-dom";
 import {
@@ -38,10 +37,9 @@ import {
   SidebarHeader,
 } from "@/components/ui/sidebar";
 import { useAuth } from "@/contexts/AuthContext";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { api } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
-import { useOrgFeatures } from "@/hooks/useOrgFeatures";
 
 // Navigation items for different roles
 const hrItems = [
@@ -66,12 +64,12 @@ const hrItems = [
   { title: "Project Calendar", url: "/calendar", icon: CalendarClock, showBadge: false },
   { title: "Holiday Management", url: "/holidays", icon: Calendar, showBadge: false },
   { title: "Leave Policies", url: "/policies", icon: FileText, showBadge: false },
-  { title: "Organization Policies", url: "/policies/management", icon: FileText, showBadge: false },
+  { title: "Tax Declarations", url: "/tax/declarations/review", icon: Receipt, showBadge: true },
+  { title: "Form 16", url: "/reports/form16", icon: Receipt, showBadge: false },
   { title: "Offboarding Policies", url: "/offboarding/policies", icon: ClipboardList, showBadge: false },
   { title: "Analytics", url: "/analytics", icon: BarChart3, showBadge: false },
   { title: "Employee Stats", url: "/employee-stats", icon: Users, showBadge: false },
   { title: "AI Assistant", url: "/ai-assistant", icon: Bot, showBadge: false },
-  { title: "RAG Document Upload", url: "/rag/upload", icon: FileUp, showBadge: false },
   { title: "Payroll", url: "/payroll", icon: DollarSign, showBadge: false, isExternal: true, sso: true },
 ];
 
@@ -86,6 +84,8 @@ const managerItems = [
   { title: "Leave Requests", url: "/leaves", icon: Calendar, showBadge: true },
   { title: "Project Calendar", url: "/calendar", icon: CalendarClock, showBadge: false },
   { title: "Appraisals", url: "/appraisals", icon: Award, showBadge: false },
+  { title: "Tax Declaration", url: "/tax/declaration", icon: Receipt, showBadge: false },
+  { title: "Form 16", url: "/reports/form16", icon: Receipt, showBadge: false },
   { title: "AI Assistant", url: "/ai-assistant", icon: Bot, showBadge: false },
   { title: "Payroll", url: "/payroll", icon: DollarSign, showBadge: false, isExternal: true, sso: true },
 ];
@@ -100,6 +100,8 @@ const employeeItems = [
   { title: "Project Calendar", url: "/calendar", icon: CalendarClock, showBadge: false },
   { title: "Org Chart", url: "/org-chart", icon: Network, showBadge: false },
   { title: "My Appraisal", url: "/my-appraisal", icon: Award, showBadge: false },
+  { title: "Tax Declaration", url: "/tax/declaration", icon: Receipt, showBadge: false },
+  { title: "Form 16", url: "/reports/form16", icon: Receipt, showBadge: false },
   { title: "AI Assistant", url: "/ai-assistant", icon: Bot, showBadge: false },
   { title: "Payroll", url: "/payroll", icon: DollarSign, showBadge: false, isExternal: true, sso: true },
 ];
@@ -107,40 +109,70 @@ const employeeItems = [
 export function AppSidebar() {
   const { user, userRole } = useAuth();
   const { toast } = useToast();
-  const { isClockMode, isTimesheetMode, isLoading: featuresLoading, features } = useOrgFeatures();
-  const [pendingCounts, setPendingCounts] = useState<{ timesheets: number; leaves: number }>({
+  const [pendingCounts, setPendingCounts] = useState<{
+    timesheets: number;
+    leaves: number;
+    taxDeclarations: number;
+  }>({
     timesheets: 0,
     leaves: 0,
+    taxDeclarations: 0,
   });
   const [organization, setOrganization] = useState<{ name: string; logo_url: string | null } | null>(null);
   const [isSuperadmin, setIsSuperadmin] = useState(false);
   const [payrollIntegrationEnabled, setPayrollIntegrationEnabled] = useState(true); // Default to true
 
+  const fetchPendingCounts = useCallback(async () => {
+    if (!user) return;
+
+    try {
+      const counts = await api.getPendingCounts();
+      setPendingCounts({
+        timesheets: counts.timesheets || 0,
+        leaves: counts.leaves || 0,
+        taxDeclarations: counts.taxDeclarations || 0,
+      });
+    } catch (error) {
+      console.error('Error fetching pending counts:', error);
+    }
+  }, [user]);
+
   useEffect(() => {
-    // Check if Payroll integration is enabled (default to true)
-    // Set to false by setting VITE_PAYROLL_INTEGRATION_ENABLED=false
     const enabled = import.meta.env.VITE_PAYROLL_INTEGRATION_ENABLED !== 'false';
     setPayrollIntegrationEnabled(enabled);
     console.log('Payroll integration enabled:', enabled);
-    
+
+    let interval: ReturnType<typeof setInterval> | undefined;
+
     if (user) {
       fetchOrganization();
       fetchIsSuperadmin();
-      
+
       if (userRole && ['manager', 'hr', 'director', 'ceo', 'admin'].includes(userRole)) {
         fetchPendingCounts();
-        
-        // Poll for updates every 30 seconds (replaces realtime)
-        const interval = setInterval(() => {
+
+        interval = setInterval(() => {
           fetchPendingCounts();
         }, 30000);
-
-        return () => {
-          clearInterval(interval);
-        };
       }
     }
-  }, [user, userRole]);
+
+    return () => {
+      if (interval) {
+        clearInterval(interval);
+      }
+    };
+  }, [user, userRole, fetchPendingCounts]);
+
+  useEffect(() => {
+    const handler = () => {
+      fetchPendingCounts();
+    };
+    window.addEventListener("taxDeclarations:updated", handler);
+    return () => {
+      window.removeEventListener("taxDeclarations:updated", handler);
+    };
+  }, [fetchPendingCounts]);
 
   const fetchOrganization = async () => {
     if (!user) return;
@@ -170,134 +202,29 @@ export function AppSidebar() {
     }
   };
 
-  const fetchPendingCounts = async () => {
-    if (!user) return;
-
-    try {
-      const counts = await api.getPendingCounts();
-      setPendingCounts({
-        timesheets: counts.timesheets || 0,
-        leaves: counts.leaves || 0,
-      });
-    } catch (error) {
-      console.error('Error fetching pending counts:', error);
-    }
-  };
-  
   // Determine which navigation items to show based on role
   const getNavigationItems = () => {
-    let items: any[] = [];
-    
     switch (userRole) {
       case 'ceo':
       case 'director':
       case 'hr':
       case 'admin':
-        items = [...hrItems];
-        break;
+        return hrItems;
       case 'manager':
-        items = [...managerItems];
-        break;
+        return managerItems;
       case 'accountant':
-        items = [
+        return [
           { title: "Dashboard", url: "/dashboard", icon: LayoutDashboard, showBadge: false },
           { title: "Payroll", url: "/payroll", icon: DollarSign, showBadge: false, isExternal: true, sso: true },
+          { title: "Tax Declarations", url: "/tax/declarations/review", icon: Receipt, showBadge: true },
+          { title: "Form 16", url: "/reports/form16", icon: Receipt, showBadge: false },
           { title: "Attendance Upload", url: "/attendance/upload", icon: Upload, showBadge: false },
           { title: "Upload History", url: "/attendance/history", icon: History, showBadge: false },
         ];
-        break;
       case 'employee':
       default:
-        items = [...employeeItems];
-        break;
+        return employeeItems;
     }
-    
-    // Filter items based on attendance capture method
-    if (!featuresLoading) {
-      if (isClockMode) {
-        // In clock mode: remove timesheet items, add clock in/out and analytics
-        items = items.filter(item => 
-          item.url !== '/timesheets' && 
-          item.url !== '/timesheet-approvals'
-        );
-        // Add Clock In/Out item if not already present
-        if (!items.some(item => item.url === '/clock')) {
-          // Insert after Dashboard or at the beginning
-          const dashboardIndex = items.findIndex(item => item.url === '/dashboard');
-          if (dashboardIndex >= 0) {
-            items.splice(dashboardIndex + 1, 0, {
-              title: "Clock In/Out",
-              url: "/clock",
-              icon: LogIn,
-              showBadge: false,
-            });
-          } else {
-            items.unshift({
-              title: "Clock In/Out",
-              url: "/clock",
-              icon: LogIn,
-              showBadge: false,
-            });
-          }
-        }
-        // Add Attendance Analytics for HR/Manager/Director/CEO
-        const hasAnalytics = items.some(item => item.url === '/attendance/analytics');
-        if (!hasAnalytics && ['hr', 'manager', 'director', 'ceo', 'admin'].includes(userRole?.toLowerCase() || '')) {
-          const clockIndex = items.findIndex(item => item.url === '/clock');
-          if (clockIndex >= 0) {
-            items.splice(clockIndex + 1, 0, {
-              title: "Attendance Analytics",
-              url: "/attendance/analytics",
-              icon: BarChart3,
-              showBadge: false,
-            });
-          } else {
-            items.push({
-              title: "Attendance Analytics",
-              url: "/attendance/analytics",
-              icon: BarChart3,
-              showBadge: false,
-            });
-          }
-        }
-      } else {
-        // In timesheet mode: remove clock in/out and analytics if present
-        items = items.filter(item => 
-          item.url !== '/clock' && 
-          item.url !== '/attendance/analytics'
-        );
-      }
-    }
-
-    const visibilityConfig = features?.role_visibility;
-    if (visibilityConfig && userRole) {
-      const roleKey = userRole.toLowerCase();
-      const roleSettings = visibilityConfig[roleKey] as Record<string, boolean> | undefined;
-      if (roleSettings) {
-        const visibilityMap: Record<string, string> = {
-          '/dashboard': 'dashboard',
-          '/my/profile': 'profile',
-          '/timesheets': 'timesheet',
-          '/timesheet-approvals': 'timesheet',
-          '/clock': 'clock_in_out',
-          '/leaves': 'leaves',
-          '/offboarding/new': 'resign',
-          '/attendance/analytics': 'attendance_analytics',
-        };
-
-        items = items.filter(item => {
-          const key = visibilityMap[item.url];
-          if (!key) {
-            return true;
-          }
-
-          const allowed = roleSettings?.[key];
-          return allowed !== false;
-        });
-      }
-    }
-    
-    return items;
   };
   
   const navigationItems = getNavigationItems();
@@ -315,6 +242,7 @@ export function AppSidebar() {
   const getBadgeCount = (url: string) => {
     if (url === '/timesheet-approvals') return pendingCounts.timesheets;
     if (url === '/leaves') return pendingCounts.leaves;
+    if (url === '/tax/declarations/review') return pendingCounts.taxDeclarations;
     return 0;
   };
 
